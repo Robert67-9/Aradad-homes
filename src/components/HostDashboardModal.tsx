@@ -2519,8 +2519,8 @@ WHERE email = lower('person@example.com');`}</pre>
 
       {/* Room Add / Edit Modal */}
       {isRoomModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full p-6 text-stone-200 my-8 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full p-6 text-stone-200 my-0 sm:my-8 shadow-2xl">
             <div className="flex items-center justify-between pb-4 border-b border-stone-800 mb-6">
               <div>
                 <h3 className="font-serif text-xl font-bold text-white flex items-center gap-2">
