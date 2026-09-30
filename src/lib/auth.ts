@@ -167,6 +167,24 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return user;
 }
 
+export async function updateAdminPassword(password: string): Promise<{ success: boolean; error?: string }> {
+  if (password.length < 8) {
+    return { success: false, error: 'Choose a password with at least 8 characters.' };
+  }
+
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Secure password updates are not configured.' };
+
+  const user = await getCurrentUser();
+  if (!user || user.role !== 'admin') {
+    return { success: false, error: 'Only an active administrator can change this password.' };
+  }
+
+  const { error } = await client.auth.updateUser({ password });
+  if (error) return { success: false, error: 'Could not update the password. Please try again.' };
+  return { success: true };
+}
+
 export async function logout(): Promise<void> {
   clearLegacyLocalAuth();
   const client = getSupabaseClient();

@@ -29,7 +29,7 @@ import {
   fetchAdminSignupRequests,
   reviewAdminSignupRequest,
 } from '../lib/supabase';
-import { AuthUser } from '../lib/auth';
+import { AuthUser, updateAdminPassword } from '../lib/auth';
 import { BEDROOM_SUITE_IMAGE, LIVING_ROOM_IMAGE, MODERN_KITCHEN_IMAGE } from '../lib/imageAssets';
 import { AradadLogo } from './AradadLogo';
 import {
@@ -215,6 +215,11 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
   const [settingsSaveError, setSettingsSaveError] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [passwordSavedToast, setPasswordSavedToast] = useState(false);
+  const [passwordSaveError, setPasswordSaveError] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   useEffect(() => {
     if (isOpen) setSettingsForm(siteSettings || getSiteSettings());
@@ -676,6 +681,36 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       setSettingsSaveError(error instanceof Error ? error.message : 'Site settings could not be saved.');
     } finally {
       setIsSavingSettings(false);
+    }
+  };
+
+  const handleUpdateAdminPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordSaveError('');
+    setPasswordSavedToast(false);
+    if (newAdminPassword.length < 8) {
+      setPasswordSaveError('Choose a password with at least 8 characters.');
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setPasswordSaveError('The passwords do not match.');
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      const result = await updateAdminPassword(newAdminPassword);
+      if (!result.success) {
+        setPasswordSaveError(result.error || 'Could not update the password.');
+        return;
+      }
+      setNewAdminPassword('');
+      setConfirmAdminPassword('');
+      setPasswordSavedToast(true);
+    } catch {
+      setPasswordSaveError('Could not update the password. Please try again.');
+    } finally {
+      setIsSavingPassword(false);
     }
   };
 
@@ -1967,6 +2002,55 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                   </button>
                 </div>
               </form>
+
+              {currentUser.role === 'admin' && (
+                <form onSubmit={handleUpdateAdminPassword} className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                  <div>
+                    <h3 className="font-serif text-base font-bold text-white flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-amber-400" />
+                      Change Admin Password
+                    </h3>
+                    <p className="text-xs text-stone-400 mt-1">Set a new password for your signed-in administrator account.</p>
+                  </div>
+
+                  {passwordSavedToast && <p role="status" className="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-xs text-emerald-200">Password updated successfully.</p>}
+                  {passwordSaveError && <p role="alert" className="rounded-lg border border-red-800 bg-red-950/60 px-3 py-2 text-xs text-red-200">{passwordSaveError}</p>}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <label className="block text-stone-400 font-semibold">
+                      New Password
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        value={newAdminPassword}
+                        onChange={e => { setNewAdminPassword(e.target.value); setPasswordSavedToast(false); setPasswordSaveError(''); }}
+                        className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                        required
+                      />
+                    </label>
+                    <label className="block text-stone-400 font-semibold">
+                      Confirm New Password
+                      <input
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        value={confirmAdminPassword}
+                        onChange={e => { setConfirmAdminPassword(e.target.value); setPasswordSavedToast(false); setPasswordSaveError(''); }}
+                        className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button type="submit" disabled={isSavingPassword} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs flex items-center gap-2 transition-colors shadow-md disabled:opacity-50">
+                      <Save className="w-4 h-4" />
+                      <span>{isSavingPassword ? 'Updating…' : 'Update Password'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
 
