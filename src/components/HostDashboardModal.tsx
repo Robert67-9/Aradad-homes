@@ -143,7 +143,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   onUpdateSiteSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'bookings' | 'calendar' | 'units' | 'rooms' | 'settings' | 'payouts' | 'supabase' | 'staff'
+    'overview' | 'bookings' | 'calendar' | 'rooms' | 'settings' | 'payouts' | 'supabase' | 'staff'
   >('overview');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,7 +153,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   const allRooms = units.flatMap(u =>
     (u.rooms || []).map(r => ({ ...r, parentUnit: u }))
   );
-  const [selectedRoomFilterApartment, setSelectedRoomFilterApartment] = useState<string>('all');
+  const [selectedRoomFilterProperty, setSelectedRoomFilterProperty] = useState<string>('all');
 
   // Room Add / Edit state
   const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
@@ -637,7 +637,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       }
       setIsRoomModalOpen(false);
       onRefreshData();
-      alert(editingRoomId ? 'Room updated successfully!' : 'New room added to apartment successfully!');
+      alert(editingRoomId ? 'Room updated successfully!' : 'New room added successfully!');
     } catch (error) {
       console.error('Could not save room:', error);
       alert('Could not save the room. Check your connection and management access, then try again.');
@@ -645,7 +645,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   };
 
   const handleDeleteRoom = async (unitId: string, roomId: string, roomName: string) => {
-    if (confirm(`Are you sure you want to delete room "${roomName}"? This will permanently remove it from the apartment and website room listings.`)) {
+    if (confirm(`Are you sure you want to delete room "${roomName}"? This will permanently remove it from the property and website room listings.`)) {
       const removed = await deleteRoomFromUnit(unitId, roomId);
       if (removed) onRefreshData();
       else alert('Could not remove that room. It may have reservations or your account may not have permission.');
@@ -874,27 +874,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
             </button>
 
             <button
-              onClick={() => setActiveTab('units')}
-              className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left whitespace-nowrap ${
-                activeTab === 'units'
-                  ? 'bg-amber-500 text-stone-950 font-bold'
-                  : 'text-stone-300 hover:bg-stone-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Building className="w-4 h-4" />
-                <span>Apartments</span>
-              </div>
-              <span
-                className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                  activeTab === 'units' ? 'bg-stone-950 text-white' : 'bg-stone-800 text-stone-400'
-                }`}
-              >
-                {units.length}
-              </span>
-            </button>
-
-            <button
               onClick={() => setActiveTab('rooms')}
               className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left whitespace-nowrap ${
                 activeTab === 'rooms'
@@ -997,11 +976,12 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={handleOpenAddUnit}
-                    className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                    onClick={() => handleOpenAddRoom()}
+                    disabled={units.length === 0}
+                    className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add Room / Apartment</span>
+                    <span>Add Room</span>
                   </button>
                   <button
                     onClick={handleExportCSV}
@@ -1138,11 +1118,11 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
 
                   <div className="pt-2 flex flex-col gap-2">
                     <button
-                      onClick={() => setActiveTab('units')}
+                      onClick={() => setActiveTab('rooms')}
                       className="w-full py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
                     >
                       <Bed className="w-3.5 h-3.5" />
-                      <span>Manage Rooms & Apartments ({units.length})</span>
+                      <span>Manage Rooms ({allRooms.length})</span>
                     </button>
                     <button
                       onClick={() => setActiveTab('settings')}
@@ -1503,97 +1483,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: ROOMS & APARTMENTS (ADD, EDIT, DELETE) */}
-          {activeTab === 'units' && (
-            <div className="max-w-5xl space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-stone-800">
-                <div>
-                  <h2 className="font-serif text-2xl font-bold text-white">
-                    Apartment & Room Inventory
-                  </h2>
-                  <p className="text-xs text-stone-400">
-                    Add new rooms, modify rates, update power allowances, or remove listings.
-                  </p>
-                </div>
-                <button
-                  onClick={handleOpenAddUnit}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs flex items-center gap-2 transition-colors shadow-md self-start sm:self-auto"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add New Apartment / Room</span>
-                </button>
-              </div>
-
-              {/* Units Grid with Edit & Delete Controls */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {units.map(unit => (
-                  <div
-                    key={unit.id}
-                    className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4 flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-stone-900 border border-stone-800 mb-3">
-                        <img
-                          src={unit.images[0] || BEDROOM_SUITE_IMAGE}
-                          alt={unit.title}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-2.5 left-2.5 bg-stone-950/80 text-white text-[11px] font-mono px-2 py-0.5 rounded border border-stone-700">
-                          {unit.propertyType}
-                        </div>
-                        <div className="absolute top-2.5 right-2.5">
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                              unit.isActive !== false
-                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                                : 'bg-red-950 text-red-300 border border-red-800'
-                            }`}
-                          >
-                            {unit.isActive !== false ? 'ACTIVE' : 'INACTIVE'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <h3 className="font-serif text-lg font-bold text-white">{unit.title}</h3>
-                      <p className="text-xs text-stone-400 mt-1 line-clamp-2">{unit.subtitle}</p>
-
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono bg-stone-900 p-3 rounded-lg border border-stone-800 mt-3">
-                        <div>Nightly: <strong className="text-white">${unit.nightlyRate}</strong></div>
-                        <div>Monthly: <strong className="text-white">${unit.weeklyMonthlyRate}</strong></div>
-                        <div>Bedrooms: <strong className="text-white">{unit.bedrooms}</strong></div>
-                        <div>Bathrooms: <strong className="text-white">{unit.bathrooms}</strong></div>
-                        <div>Max Guests: <strong className="text-white">{unit.maxOccupancy}</strong></div>
-                        <div>Power: <strong className="text-amber-400">GH₵ {unit.prepaidElectricityGhc}</strong></div>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-stone-800 flex items-center justify-between">
-                      <span className="text-[11px] text-stone-500 font-mono">
-                        ID: {unit.id}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleOpenEditUnit(unit)}
-                          className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUnit(unit.id, unit.title)}
-                          className="p-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 rounded-lg transition-colors"
-                          title="Delete Listing"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* TAB: ROOMS MANAGEMENT (ADD / EDIT / DELETE ROOMS) */}
           {activeTab === 'rooms' && (
             <div className="max-w-5xl space-y-6">
@@ -1604,28 +1493,35 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                     <span>Individual Rooms & En-Suite Chambers</span>
                   </h2>
                   <p className="text-xs text-stone-400">
-                    Add new rooms to your apartments, edit room details & rates, or remove rooms from booking inventory.
+                    Add rooms, edit details and rates, or remove rooms from booking inventory.
                   </p>
                 </div>
                 <button
                   onClick={() => handleOpenAddRoom()}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs flex items-center gap-2 transition-colors shadow-md self-start sm:self-auto"
+                  disabled={units.length === 0}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs flex items-center gap-2 transition-colors shadow-md self-start sm:self-auto disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add New Room</span>
                 </button>
               </div>
 
-              {/* Apartment Filter and Stats */}
+              {units.length === 0 && (
+                <p role="status" className="rounded-lg border border-amber-800 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+                  No active property is configured in the database yet. A property record is needed internally before rooms can be added.
+                </p>
+              )}
+
+              {/* Property Filter and Stats */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-950 p-3.5 rounded-xl border border-stone-800">
                 <div className="flex items-center gap-2 text-xs">
-                  <span className="text-stone-400 font-semibold">Filter by Apartment:</span>
+                  <span className="text-stone-400 font-semibold">Filter by Property:</span>
                   <select
-                    value={selectedRoomFilterApartment}
-                    onChange={e => setSelectedRoomFilterApartment(e.target.value)}
+                    value={selectedRoomFilterProperty}
+                    onChange={e => setSelectedRoomFilterProperty(e.target.value)}
                     className="bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1 text-xs text-white"
                   >
-                    <option value="all">All Apartments ({units.length})</option>
+                    <option value="all">All Properties ({units.length})</option>
                     {units.map(u => (
                       <option key={u.id} value={u.id}>
                         {u.title}
@@ -1645,8 +1541,8 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                 {allRooms
                   .filter(
                     r =>
-                      selectedRoomFilterApartment === 'all' ||
-                      r.parentUnit.id === selectedRoomFilterApartment
+                      selectedRoomFilterProperty === 'all' ||
+                      r.parentUnit.id === selectedRoomFilterProperty
                   )
                   .map(room => (
                     <div
@@ -2532,7 +2428,7 @@ WHERE email = lower('person@example.com');`}</pre>
                 <p className="text-xs text-stone-400">
                   {editingRoomId
                     ? 'Update room photos, weekly or monthly pricing, and guest capacity.'
-                    : 'Add an individual room or en-suite chamber to an apartment.'}
+                    : 'Add an individual room or en-suite chamber to the property.'}
                 </p>
               </div>
               <button
@@ -2546,7 +2442,7 @@ WHERE email = lower('person@example.com');`}</pre>
             <form onSubmit={handleSaveRoomSubmit} className="space-y-4">
               <div>
                 <label className="block text-stone-300 mb-1 font-semibold text-xs">
-                  Parent Apartment Property
+                  Property
                 </label>
                 <select
                   value={roomParentUnitId}
@@ -2784,7 +2680,7 @@ WHERE email = lower('person@example.com');`}</pre>
                   type="submit"
                   className="px-6 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-xs transition-colors shadow-sm"
                 >
-                  {editingRoomId ? 'Save Room Changes' : 'Add Room to Apartment'}
+                  {editingRoomId ? 'Save Room Changes' : 'Add Room'}
                 </button>
               </div>
             </form>
