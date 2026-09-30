@@ -1303,16 +1303,25 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                               {b.bookingStatus === 'pending_approval' && (
                                 <button
                                   onClick={() => handleUpdateStatus(b.id, 'confirmed')}
-                                  disabled={b.paymentGateway === 'paystack' && b.paymentStatus !== 'paid'}
-                                  title={b.paymentGateway === 'paystack' && b.paymentStatus !== 'paid'
-                                    ? 'Paystack payment must verify before approval.'
+                                  disabled={b.paymentStatus !== 'paid' && b.paymentStatus !== 'verified'}
+                                  title={b.paymentStatus !== 'paid' && b.paymentStatus !== 'verified'
+                                    ? 'Mark the payment as paid or verified before approval.'
                                     : 'Approve Reservation'}
                                   className="p-1.5 text-emerald-400 hover:bg-emerald-950 rounded disabled:cursor-not-allowed disabled:opacity-35"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </button>
                               )}
-                              {b.paymentStatus === 'pending' && b.paymentGateway !== 'paystack' && (
+                              {b.paymentStatus === 'pending' && b.paymentGateway === 'cash' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(b.id, undefined, 'paid')}
+                                  title="Confirm cash received"
+                                  className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded"
+                                >
+                                  Mark Cash Paid
+                                </button>
+                              )}
+                              {b.paymentStatus === 'pending' && b.paymentGateway !== 'paystack' && b.paymentGateway !== 'cash' && (
                                 <button
                                   onClick={() => handleUpdateStatus(b.id, undefined, 'verified')}
                                   title="Mark manual payment as verified after checking the transfer."
