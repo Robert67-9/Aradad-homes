@@ -26,7 +26,7 @@ import {
   reviewAdminSignupRequest,
   verifyPaystackCheckout,
 } from '../lib/supabase';
-import { AuthUser } from '../lib/auth';
+import { AuthUser, createStaffAccount } from '../lib/auth';
 import { BEDROOM_SUITE_IMAGE, LIVING_ROOM_IMAGE, MODERN_KITCHEN_IMAGE } from '../lib/imageAssets';
 import { AradadLogo } from './AradadLogo';
 import {
@@ -220,6 +220,9 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   const [signupRequestsError, setSignupRequestsError] = useState('');
   const [reviewingSignupRequest, setReviewingSignupRequest] = useState<string | null>(null);
   const [signupRoleById, setSignupRoleById] = useState<Record<string, 'admin' | 'manager' | 'staff'>>({});
+  const [newStaffForm, setNewStaffForm] = useState({ fullName: '', email: '', password: '', role: 'staff' as AuthUser['role'] });
+  const [isCreatingStaff, setIsCreatingStaff] = useState(false);
+  const [staffCreateMessage, setStaffCreateMessage] = useState<{ success: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'staff' || currentUser.role !== 'admin') return;
@@ -249,6 +252,21 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     } finally {
       setReviewingSignupRequest(null);
     }
+  };
+
+  const handleCreateStaff = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsCreatingStaff(true);
+    setStaffCreateMessage(null);
+    const result = await createStaffAccount(newStaffForm);
+    if (result.success) {
+      setNewStaffForm({ fullName: '', email: '', password: '', role: 'staff' });
+      setStaffCreateMessage({ success: true, text: 'Management account created. Share the temporary password securely with the team member.' });
+      onRefreshData();
+    } else {
+      setStaffCreateMessage({ success: false, text: result.error || 'Could not create the management account.' });
+    }
+    setIsCreatingStaff(false);
   };
 
   // Key metrics
@@ -2098,7 +2116,76 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                 <p className="text-xs text-stone-400 mt-1">Verified signup requests remain locked out until an active administrator approves them.</p>
               </div>
               {currentUser.role === 'admin' ? (
-                <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                <>
+                  <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                    <div>
+                      <h3 className="font-semibold text-white">Add a management account</h3>
+                      <p className="text-xs text-stone-400 mt-1">Create a staff, manager, or co-admin account directly. The email is confirmed automatically.</p>
+                    </div>
+                    <form onSubmit={handleCreateStaff} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <label className="text-xs text-stone-300">
+                        Full name
+                        <input
+                          type="text"
+                          value={newStaffForm.fullName}
+                          onChange={event => setNewStaffForm({ ...newStaffForm, fullName: event.target.value })}
+                          minLength={2}
+                          maxLength={120}
+                          required
+                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                      <label className="text-xs text-stone-300">
+                        Email address
+                        <input
+                          type="email"
+                          value={newStaffForm.email}
+                          onChange={event => setNewStaffForm({ ...newStaffForm, email: event.target.value })}
+                          required
+                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                      <label className="text-xs text-stone-300">
+                        Temporary password
+                        <input
+                          type="password"
+                          value={newStaffForm.password}
+                          onChange={event => setNewStaffForm({ ...newStaffForm, password: event.target.value })}
+                          minLength={8}
+                          required
+                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                      <label className="text-xs text-stone-300">
+                        Access level
+                        <select
+                          value={newStaffForm.role}
+                          onChange={event => setNewStaffForm({ ...newStaffForm, role: event.target.value as AuthUser['role'] })}
+                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                        >
+                          <option value="staff">Staff</option>
+                          <option value="manager">Manager</option>
+                          <option value="admin">Co-admin</option>
+                        </select>
+                      </label>
+                      <div className="md:col-span-2 flex items-center justify-between gap-3">
+                        {staffCreateMessage ? (
+                          <p role={staffCreateMessage.success ? 'status' : 'alert'} className={`text-xs ${staffCreateMessage.success ? 'text-emerald-300' : 'text-red-300'}`}>
+                            {staffCreateMessage.text}
+                          </p>
+                        ) : <span />}
+                        <button
+                          type="submit"
+                          disabled={isCreatingStaff}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-stone-950 rounded-lg text-xs font-bold"
+                        >
+                          {isCreatingStaff ? 'Creating…' : 'Create Account'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+
+                  <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="font-semibold text-white">Pending access requests</h3>
@@ -2161,7 +2248,8 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                       ))}
                     </div>
                   )}
-                </section>
+                  </section>
+                </>
               ) : (
                 <div className="p-4 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-400">
                   Access requests can only be reviewed by an active administrator.

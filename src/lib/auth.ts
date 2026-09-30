@@ -185,6 +185,25 @@ export async function updateAdminPassword(password: string): Promise<{ success: 
   return { success: true };
 }
 
+export async function createStaffAccount(input: {
+  fullName: string;
+  email: string;
+  password: string;
+  role: AuthUser['role'];
+}): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Secure staff management is not configured.' };
+  try {
+    const { data, error } = await client.functions.invoke('admin-create-staff', { body: input });
+    if (error || !data?.success) {
+      return { success: false, error: data?.error || error?.message || 'Could not create the management account.' };
+    }
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Could not reach the staff management service.' };
+  }
+}
+
 export async function logout(): Promise<void> {
   clearLegacyLocalAuth();
   const client = getSupabaseClient();
