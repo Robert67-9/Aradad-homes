@@ -204,6 +204,17 @@ export async function createStaffAccount(input: {
   }
 }
 
+export async function fetchStaffAccounts(): Promise<AuthUser[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+  const { data, error } = await client
+    .from('admin_users')
+    .select('user_id,email,full_name,role,phone,title,created_at,is_active')
+    .order('created_at', { ascending: true });
+  if (error) throw new Error('Could not load management accounts.');
+  return (data || []).map(mapAdminProfile).filter((user): user is AuthUser => Boolean(user));
+}
+
 export async function logout(): Promise<void> {
   clearLegacyLocalAuth();
   const client = getSupabaseClient();
