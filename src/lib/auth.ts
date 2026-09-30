@@ -31,35 +31,14 @@ function clearLegacyLocalAuth() {
   localStorage.removeItem('aradad_admin_accounts');
 }
 
-export async function requestAdminOtp(email: string): Promise<{ success: boolean; error?: string }> {
+export async function requestAdminSignupOtp(email: string, password: string): Promise<{ success: boolean; error?: string }> {
   clearLegacyLocalAuth();
   const cleanEmail = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
     return { success: false, error: 'Enter a valid email address.' };
   }
-
-  const client = getSupabaseClient();
-  if (!client) {
-    return { success: false, error: 'Secure sign-in is not configured. Set the Supabase URL and public key in the deployment environment.' };
-  }
-
-  try {
-    await client.auth.signInWithOtp({
-      email: cleanEmail,
-      options: { shouldCreateUser: false },
-    });
-  } catch {
-    // Deliberately keep the response identical for unknown and authorized addresses.
-  }
-  // Keep this response identical for unknown, inactive, and authorized accounts.
-  return { success: true };
-}
-
-export async function requestAdminSignupOtp(email: string): Promise<{ success: boolean; error?: string }> {
-  clearLegacyLocalAuth();
-  const cleanEmail = email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-    return { success: false, error: 'Enter a valid email address.' };
+  if (password.length < 8) {
+    return { success: false, error: 'Choose a password with at least 8 characters.' };
   }
 
   const client = getSupabaseClient();
@@ -67,13 +46,12 @@ export async function requestAdminSignupOtp(email: string): Promise<{ success: b
     return { success: false, error: 'Secure signup is not configured. Set the Supabase URL and public key in the deployment environment.' };
   }
 
-  try {
-    await client.auth.signInWithOtp({
-      email: cleanEmail,
-      options: { shouldCreateUser: true },
-    });
-  } catch {
-    // Keep the response identical whether this address can request access or not.
+  const { error } = await client.auth.signUp({
+    email: cleanEmail,
+    password,
+  });
+  if (error) {
+    return { success: false, error: 'Could not create the account. Check the password and try again.' };
   }
   return { success: true };
 }
@@ -127,11 +105,14 @@ export async function verifySignupOtpAndRequestAccess(
   }
 }
 
-export async function verifyAdminOtp(email: string, token: string): Promise<AuthResult> {
+export async function signInAdminWithPassword(email: string, password: string): Promise<AuthResult> {
+  clearLegacyLocalAuth();
   const cleanEmail = email.trim().toLowerCase();
-  const cleanToken = token.replace(/\s+/g, '');
-  if (!/^\d{6,8}$/.test(cleanToken)) {
-    return { success: false, error: 'Enter the one-time code from your email.' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return { success: false, error: 'Enter a valid email address.' };
+  }
+  if (!password) {
+    return { success: false, error: 'Enter your password.' };
   }
 
   const client = getSupabaseClient();
@@ -139,13 +120,12 @@ export async function verifyAdminOtp(email: string, token: string): Promise<Auth
     return { success: false, error: 'Secure sign-in is not configured.' };
   }
 
-  const { data, error } = await client.auth.verifyOtp({
+  const { data, error } = await client.auth.signInWithPassword({
     email: cleanEmail,
-    token: cleanToken,
-    type: 'email',
+    password,
   });
   if (error || !data.user) {
-    return { success: false, error: 'That code is invalid or expired. Request a new code and try again.' };
+    return { success: false, error: 'The email or password is incorrect.' };
   }
 
   const { data: profile, error: profileError } = await client

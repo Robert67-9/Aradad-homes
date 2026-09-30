@@ -1,4 +1,11 @@
 import { Apartment, Unit, Review } from './types';
+import {
+  BALCONY_VIEW_IMAGE,
+  BEDROOM_SUITE_IMAGE,
+  EXTERIOR_FACADE_IMAGE,
+  LIVING_ROOM_IMAGE,
+  MODERN_KITCHEN_IMAGE,
+} from './imageAssets';
 
 export const APARTMENT_DATA: Apartment = {
   id: 'aradad-adjiringanor',
@@ -58,11 +65,11 @@ export const INITIAL_UNITS: Unit[] = [
       'GH₵ 500.00 Initial Prepaid Electricity Credit',
     ],
     images: [
-      '/src/assets/images/aradad_exterior_facade_1790622689884.jpg',
-      '/src/assets/images/aradad_living_room_1790622701630.jpg',
-      '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg',
-      '/src/assets/images/aradad_modern_kitchen_1790622722236.jpg',
-      '/src/assets/images/aradad_balcony_view_1790622732987.jpg',
+      EXTERIOR_FACADE_IMAGE,
+      LIVING_ROOM_IMAGE,
+      BEDROOM_SUITE_IMAGE,
+      MODERN_KITCHEN_IMAGE,
+      BALCONY_VIEW_IMAGE,
     ],
     rooms: [
       {
@@ -79,7 +86,7 @@ export const INITIAL_UNITS: Unit[] = [
         currency: 'USD',
         maxGuests: 2,
         description: 'Features a king bed, private en-suite bathroom with walk-in shower, built-in wardrobes, and private terrace access.',
-        images: ['/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'],
+        images: [BEDROOM_SUITE_IMAGE],
         isActive: true,
       },
       {
@@ -96,7 +103,7 @@ export const INITIAL_UNITS: Unit[] = [
         currency: 'USD',
         maxGuests: 2,
         description: 'Serene bedroom with comfortable queen-sized bed, en-suite bathroom, split AC, and ample closet storage.',
-        images: ['/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'],
+        images: [BEDROOM_SUITE_IMAGE],
         isActive: true,
       },
       {
@@ -113,7 +120,7 @@ export const INITIAL_UNITS: Unit[] = [
         currency: 'USD',
         maxGuests: 2,
         description: 'Quiet, beautifully furnished bedroom with dedicated bathroom, writing space, and silent air conditioning.',
-        images: ['/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'],
+        images: [BEDROOM_SUITE_IMAGE],
         isActive: true,
       },
     ],
@@ -157,11 +164,11 @@ export const INITIAL_UNITS: Unit[] = [
       'GH₵ 350.00 Initial Prepaid Electricity Credit',
     ],
     images: [
-      '/src/assets/images/aradad_living_room_1790622701630.jpg',
-      '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg',
-      '/src/assets/images/aradad_modern_kitchen_1790622722236.jpg',
-      '/src/assets/images/aradad_balcony_view_1790622732987.jpg',
-      '/src/assets/images/aradad_exterior_facade_1790622689884.jpg',
+      LIVING_ROOM_IMAGE,
+      BEDROOM_SUITE_IMAGE,
+      MODERN_KITCHEN_IMAGE,
+      BALCONY_VIEW_IMAGE,
+      EXTERIOR_FACADE_IMAGE,
     ],
     rooms: [
       {
@@ -178,7 +185,7 @@ export const INITIAL_UNITS: Unit[] = [
         currency: 'USD',
         maxGuests: 2,
         description: 'Master bedroom with en-suite bath, plush double/queen bed, vanity mirror, and quiet split AC.',
-        images: ['/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'],
+        images: [BEDROOM_SUITE_IMAGE],
         isActive: true,
       },
       {
@@ -195,7 +202,7 @@ export const INITIAL_UNITS: Unit[] = [
         currency: 'USD',
         maxGuests: 2,
         description: 'Comfortable guest bedroom with en-suite shower, fitted closet, and high thread-count linens.',
-        images: ['/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'],
+        images: [BEDROOM_SUITE_IMAGE],
         isActive: true,
       },
     ],

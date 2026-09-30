@@ -395,7 +395,7 @@ export default function App() {
         siteSettings={siteSettings}
       />
 
-      {/* 3. OTP-only management sign-in */}
+      {/* 3. Management sign-in */}
       <AdminAuthModal
         isOpen={isAdminAuthOpen}
         onClose={() => setIsAdminAuthOpen(false)}

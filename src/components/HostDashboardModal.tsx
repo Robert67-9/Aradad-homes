@@ -30,6 +30,7 @@ import {
   reviewAdminSignupRequest,
 } from '../lib/supabase';
 import { AuthUser } from '../lib/auth';
+import { BEDROOM_SUITE_IMAGE, LIVING_ROOM_IMAGE, MODERN_KITCHEN_IMAGE } from '../lib/imageAssets';
 import { AradadLogo } from './AradadLogo';
 import {
   X,
@@ -82,7 +83,7 @@ interface HostDashboardModalProps {
   onUpdateSiteSettings?: (newSettings: SiteSettings) => void;
 }
 
-const DEFAULT_ROOM_IMAGE = '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg';
+const DEFAULT_ROOM_IMAGE = BEDROOM_SUITE_IMAGE;
 const MAX_ROOM_IMAGES = 6;
 
 async function compressRoomImage(file: File): Promise<string> {
@@ -205,7 +206,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     bookingStyle: 'instant' as 'instant' | 'manual',
     description: '',
     amenitiesStr: 'High-Speed Starlink Wi-Fi, 24/7 Standby Generator, Air Conditioning, 24/7 Gated Security, Parking, Modern Kitchen',
-    imageUrl: '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg',
+    imageUrl: BEDROOM_SUITE_IMAGE,
     isActive: true,
   });
 
@@ -387,7 +388,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       bookingStyle: 'instant',
       description: '',
       amenitiesStr: 'High-Speed Starlink Wi-Fi, 24/7 Standby Generator, Air Conditioning, 24/7 Gated Security, Parking, Modern Kitchen',
-      imageUrl: '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg',
+      imageUrl: BEDROOM_SUITE_IMAGE,
       isActive: true,
     });
     setIsUnitModalOpen(true);
@@ -413,7 +414,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       bookingStyle: unit.bookingStyle || 'instant',
       description: unit.description,
       amenitiesStr: (unit.amenities || []).join(', '),
-      imageUrl: unit.images?.[0] || '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg',
+      imageUrl: unit.images?.[0] || BEDROOM_SUITE_IMAGE,
       isActive: unit.isActive !== false,
     });
     setIsUnitModalOpen(true);
@@ -455,9 +456,9 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       description: unitForm.description.trim(),
       amenities: amenitiesList,
       images: [
-        unitForm.imageUrl.trim() || '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg',
-        '/src/assets/images/aradad_living_room_1790622701630.jpg',
-        '/src/assets/images/aradad_modern_kitchen_1790622722236.jpg',
+        unitForm.imageUrl.trim() || BEDROOM_SUITE_IMAGE,
+        LIVING_ROOM_IMAGE,
+        MODERN_KITCHEN_IMAGE,
       ],
       isActive: unitForm.isActive,
     };
@@ -1498,7 +1499,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                     <div>
                       <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-stone-900 border border-stone-800 mb-3">
                         <img
-                          src={unit.images[0] || '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'}
+                          src={unit.images[0] || BEDROOM_SUITE_IMAGE}
                           alt={unit.title}
                           className="w-full h-full object-cover"
                         />
@@ -1620,7 +1621,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                       <div>
                         <div className="relative aspect-[4/3] bg-stone-900 overflow-hidden">
                           <img
-                            src={room.images[0] || '/src/assets/images/aradad_bedroom_suite_1790622712187.jpg'}
+                            src={room.images[0] || BEDROOM_SUITE_IMAGE}
                             alt={room.name}
                             className="w-full h-full object-cover"
                           />
@@ -2214,9 +2215,9 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                 <h3 className="font-semibold text-white">Enable secure staff signup</h3>
                 <ol className="list-decimal pl-5 space-y-2">
                   <li>Run the current security schema from the Supabase Database tab in the Supabase SQL Editor.</li>
-                  <li>In Supabase Authentication settings, enable email sign-ups and configure email OTP delivery. Set the email template to include <code className="text-amber-300">{'{{ .Token }}'}</code>.</li>
-                  <li>Staff can request access from the sign-in screen. Their email must be verified, and only an active admin can assign a role.</li>
-                  <li>For the first administrator only, create the Auth user and add its active <code className="text-amber-300">admin_users</code> profile in the SQL Editor.</li>
+                  <li>In Supabase Authentication settings, enable email sign-ups and configure email verification OTP delivery. Set the email template to include <code className="text-amber-300">{'{{ .Token }}'}</code>.</li>
+                  <li>Staff create a password when requesting access, then verify their email. Only an active admin can assign a role.</li>
+                  <li>For the first administrator only, create an Auth user with a password and add its active <code className="text-amber-300">admin_users</code> profile in the SQL Editor.</li>
                 </ol>
                 <pre className="overflow-x-auto rounded-lg bg-black p-4 text-[11px] text-emerald-200">{`INSERT INTO public.admin_users (user_id, email, full_name, role, is_active)
 SELECT id, lower(email), 'First Admin Name', 'admin', true
@@ -2376,7 +2377,7 @@ WHERE email = lower('person@example.com');`}</pre>
                   type="text"
                   value={unitForm.imageUrl}
                   onChange={e => setUnitForm({ ...unitForm, imageUrl: e.target.value })}
-                  placeholder="/src/assets/images/aradad_living_room_1790622701630.jpg"
+                  placeholder={LIVING_ROOM_IMAGE}
                   className="w-full bg-stone-950 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white font-mono"
                 />
               </div>

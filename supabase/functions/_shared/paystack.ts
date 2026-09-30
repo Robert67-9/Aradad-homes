@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,13 +11,6 @@ export function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-export function getAdminClient() {
-  const url = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !serviceKey) throw new Error('Supabase server credentials are not configured.');
-  return createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
 export function getPaystackSecret(): string {
@@ -83,7 +76,7 @@ function mapRefundStatus(status: unknown): RefundPaymentStatus {
 }
 
 async function requestPaystackRefund(
-  admin: ReturnType<typeof getAdminClient>,
+  admin: SupabaseClient,
   secret: string,
   bookingId: string,
   reference: string,
@@ -147,9 +140,8 @@ async function requestPaystackRefund(
   }
 }
 
-export async function verifyAndRecordPayment(reference: string) {
+export async function verifyAndRecordPayment(admin: SupabaseClient, reference: string) {
   const secret = getPaystackSecret();
-  const admin = getAdminClient();
   const { data: booking, error: bookingError } = await admin
     .from('bookings')
     .select('id,booking_code,guest_email,unit_id,payment_gateway,payment_preference,payment_status,payment_reference,payment_hold_expires_at,booking_status,currency,subtotal_amount,security_deposit,total_amount,refunded_amount')

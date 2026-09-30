@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Currency, Unit, Room, Booking, BlockedDate, SiteSettings } from '../lib/types';
 import { formatCurrency, calculateNights, checkRoomAvailability, getRoomMonthlyRate, getRoomWeeklyRate } from '../lib/utils';
+import { HERO_BACKGROUND_IMAGE } from '../lib/imageAssets';
 import { Calendar, Users, Wifi, Zap, Shield, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface HeroProps {
@@ -97,7 +98,7 @@ export const Hero: React.FC<HeroProps> = ({
     <div className="relative bg-stone-900 text-stone-100 overflow-hidden">
       <div className="absolute inset-0 z-0">
         <img
-          src="/src/assets/images/aradad_exterior_facade_1790622689884.jpg"
+          src={HERO_BACKGROUND_IMAGE}
           alt="Aradad Homes in Adjiringanor, Accra"
           className="w-full h-full object-cover object-center filter brightness-40"
           referrerPolicy="no-referrer"

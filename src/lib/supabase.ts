@@ -1,6 +1,7 @@
 ﻿import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AdminSignupRequest, Booking, Unit, Room, BlockedDate, SupabaseConfig, SiteSettings } from './types';
 import { INITIAL_UNITS, DEFAULT_SITE_SETTINGS } from './mockData';
+import { resolveImageUrls } from './imageAssets';
 
 const STORAGE_KEYS = {
   SUPABASE_URL: 'aradad_supabase_url',
@@ -196,7 +197,7 @@ export async function fetchUnits(): Promise<Unit[]> {
           bookingStyle: item.booking_style || 'instant',
           description: item.description,
           amenities: item.amenities || [],
-          images: item.images && item.images.length > 0 ? item.images : INITIAL_UNITS.find(u => u.id === item.id)?.images || [],
+          images: resolveImageUrls(item.images?.length ? item.images : INITIAL_UNITS.find(u => u.id === item.id)?.images || []),
           rooms: roomError ? [] : roomsByUnit.get(item.id) || [],
           isActive: item.is_active,
         }));
@@ -219,7 +220,14 @@ export function getLocalUnits(): Unit[] {
   }
   try {
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_UNITS;
+    if (!Array.isArray(parsed) || parsed.length === 0) return INITIAL_UNITS;
+    return parsed.map((unit: Unit) => ({
+      ...unit,
+      images: resolveImageUrls(unit.images),
+      rooms: Array.isArray(unit.rooms)
+        ? unit.rooms.map(room => ({ ...room, images: resolveImageUrls(room.images) }))
+        : [],
+    }));
   } catch {
     return INITIAL_UNITS;
   }
@@ -247,7 +255,7 @@ function mapRoomRecord(item: any): Room {
     currency: item.currency || 'USD',
     maxGuests: Number(item.max_guests || 2),
     description: item.description || '',
-    images: Array.isArray(item.images) ? item.images : [],
+    images: resolveImageUrls(item.images),
     isActive: item.is_active !== false,
   };
 }

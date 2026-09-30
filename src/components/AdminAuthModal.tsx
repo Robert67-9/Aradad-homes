@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import {
   AuthUser,
-  requestAdminOtp,
   requestAdminSignupOtp,
-  verifyAdminOtp,
+  signInAdminWithPassword,
   verifySignupOtpAndRequestAccess,
 } from '../lib/auth';
 import { AradadLogo } from './AradadLogo';
@@ -21,6 +20,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
   const [mode, setMode] = useState<AuthMode>('login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [signupSubmitted, setSignupSubmitted] = useState(false);
@@ -35,14 +36,10 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      const result = mode === 'signup'
-        ? await requestAdminSignupOtp(email)
-        : await requestAdminOtp(email);
+      const result = await requestAdminSignupOtp(email, password);
       if (result.success) {
         setOtpSent(true);
-        setSuccessMsg(mode === 'signup'
-          ? 'If this email can request access, a one-time verification code has been sent.'
-          : 'If this email is authorized, a one-time sign-in code has been sent.');
+        setSuccessMsg('If this email can request access, a one-time verification code has been sent.');
       } else {
         setErrorMsg(result.error || 'Could not send a one-time code.');
       }
@@ -59,7 +56,35 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
       setErrorMsg('Enter your name (2 to 120 characters).');
       return;
     }
+    if (mode === 'signup' && password.length < 8) {
+      setErrorMsg('Choose a password with at least 8 characters.');
+      return;
+    }
+    if (mode === 'signup' && password !== confirmPassword) {
+      setErrorMsg('The passwords do not match.');
+      return;
+    }
     await sendOtp();
+  };
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const result = await signInAdminWithPassword(email, password);
+      if (result.success && result.user) {
+        onAuthSuccess(result.user);
+        handleClose();
+      } else {
+        setErrorMsg(result.error || 'Could not sign in.');
+      }
+    } catch {
+      setErrorMsg('Could not sign in. Check your email and password, then try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -67,28 +92,15 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
     setLoading(true);
     setErrorMsg('');
     try {
-      if (mode === 'signup') {
-        const result = await verifySignupOtpAndRequestAccess(email, otp, fullName);
-        if (result.success) {
-          setSignupSubmitted(true);
-          setSuccessMsg('Your email is verified. An administrator will review your access request.');
-        } else {
-          setErrorMsg(result.error || 'Could not submit your access request.');
-        }
-        return;
-      }
-
-      const result = await verifyAdminOtp(email, otp);
-      if (result.success && result.user) {
-        onAuthSuccess(result.user);
-        handleClose();
+      const result = await verifySignupOtpAndRequestAccess(email, otp, fullName);
+      if (result.success) {
+        setSignupSubmitted(true);
+        setSuccessMsg('Your email is verified. An administrator will review your access request.');
       } else {
-        setErrorMsg(result.error || 'Could not verify this code.');
+        setErrorMsg(result.error || 'Could not submit your access request.');
       }
     } catch {
-      setErrorMsg(mode === 'signup'
-        ? 'Could not submit your request. Request a new code and try again.'
-        : 'Could not verify this code. Request a new code and try again.');
+      setErrorMsg('Could not submit your request. Request a new code and try again.');
     } finally {
       setLoading(false);
     }
@@ -97,6 +109,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
   const handleUseDifferentEmail = () => {
     setOtpSent(false);
     setSignupSubmitted(false);
+    setPassword('');
+    setConfirmPassword('');
     setOtp('');
     setErrorMsg('');
     setSuccessMsg('');
@@ -106,6 +120,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
     setMode(nextMode);
     setOtpSent(false);
     setSignupSubmitted(false);
+    setPassword('');
+    setConfirmPassword('');
     setOtp('');
     setErrorMsg('');
     setSuccessMsg('');
@@ -115,6 +131,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
     setMode('login');
     setFullName('');
     setEmail('');
+    setPassword('');
+    setConfirmPassword('');
     setOtp('');
     setOtpSent(false);
     setSignupSubmitted(false);
@@ -132,12 +150,12 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
         : 'Management Sign In';
 
   const description = signupSubmitted
-    ? 'Your verified email is waiting for approval. After approval, return here and sign in with a new one-time code.'
+    ? 'Your verified email is waiting for approval. After approval, sign in here with your management password.'
     : otpSent
       ? `Enter the one-time code sent to ${email}.`
       : mode === 'signup'
-        ? 'Verify your work email to request access. An administrator must approve your account before you can enter the portal.'
-        : 'Sign in with a one-time code sent to an approved management email address.';
+        ? 'Create a password and verify your work email to request access. An administrator must approve your account before you can enter the portal.'
+        : 'Sign in with the password for your approved management account.';
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
@@ -178,7 +196,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
             </div>
           ) : !otpSent ? (
             <>
-              <form onSubmit={handleRequestOtp} className="space-y-4">
+              <form onSubmit={mode === 'signup' ? handleRequestOtp : handlePasswordLogin} className="space-y-4">
                 {mode === 'signup' && (
                   <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider">
                     Full name
@@ -213,8 +231,61 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
                     />
                   </span>
                 </label>
+                {mode === 'signup' && (
+                  <>
+                    <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider">
+                      Create password
+                      <span className="relative mt-1.5 block">
+                        <KeyRound className="w-4 h-4 text-stone-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          value={password}
+                          onChange={e => setPassword(e.target.value)}
+                          minLength={8}
+                          placeholder="At least 8 characters"
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
+                          required
+                        />
+                      </span>
+                    </label>
+                    <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider">
+                      Confirm password
+                      <span className="relative mt-1.5 block">
+                        <KeyRound className="w-4 h-4 text-stone-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          minLength={8}
+                          placeholder="Enter it again"
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
+                          required
+                        />
+                      </span>
+                    </label>
+                  </>
+                )}
+                {mode === 'login' && (
+                  <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider">
+                    Password
+                    <span className="relative mt-1.5 block">
+                      <KeyRound className="w-4 h-4 text-stone-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full bg-stone-950 border border-stone-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
+                        required
+                      />
+                    </span>
+                  </label>
+                )}
                 <button type="submit" disabled={loading} className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-lg text-sm transition-colors shadow-md disabled:opacity-50">
-                  {loading ? 'Sending code…' : mode === 'signup' ? 'Verify email and request access' : 'Email me a sign-in code'}
+                  {loading ? (mode === 'signup' ? 'Creating account…' : 'Signing in…') : mode === 'signup' ? 'Create password and request access' : 'Sign in'}
                 </button>
               </form>
 
@@ -260,7 +331,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
 
           <div className="flex gap-2 border-t border-stone-800 pt-4 text-[11px] text-stone-400">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <p>One-time codes verify email ownership. New staff access stays pending until an active administrator approves it.</p>
+            <p>Only active management accounts can sign in. New staff access stays pending until an administrator approves it.</p>
           </div>
         </div>
       </div>
