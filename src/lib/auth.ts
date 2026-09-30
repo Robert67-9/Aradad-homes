@@ -181,7 +181,7 @@ export async function updateAdminPassword(password: string): Promise<{ success: 
   }
 
   const { error } = await client.auth.updateUser({ password });
-  if (error) return { success: false, error: 'Could not update the password. Please try again.' };
+  if (error) return { success: false, error: error.message || 'Could not update the password. Please try again.' };
   return { success: true };
 }
 
