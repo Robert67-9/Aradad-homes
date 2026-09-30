@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import schemaSql from '../lib/supabase/schema.sql?raw';
 import { AdminSignupRequest, Booking, BlockedDate, Unit, Room, Currency, SiteSettings } from '../lib/types';
 import {
   convertCurrencyAmount,
@@ -23,9 +22,6 @@ import {
   deleteRoomFromUnit,
   getSiteSettings,
   saveSiteSettings,
-  getStoredSupabaseConfig,
-  saveStoredSupabaseConfig,
-  testSupabaseConnection,
   fetchAdminSignupRequests,
   reviewAdminSignupRequest,
 } from '../lib/supabase';
@@ -46,11 +42,9 @@ import {
   Clock,
   DollarSign,
   Building,
-  Database,
   KeyRound,
   LogOut,
   ExternalLink,
-  Copy,
   Bed,
   Phone,
   Mail,
@@ -220,13 +214,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     if (isOpen) setSettingsForm(siteSettings || getSiteSettings());
   }, [isOpen, siteSettings]);
 
-  // Supabase management inside Admin
-  const currentSupabase = getStoredSupabaseConfig();
-  const [supaUrl, setSupaUrl] = useState(currentSupabase.url);
-  const [supaKey, setSupaKey] = useState(currentSupabase.anonKey);
-  const [supaTesting, setSupaTesting] = useState(false);
-  const [supaResult, setSupaResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [copiedSql, setCopiedSql] = useState(false);
   const [signupRequests, setSignupRequests] = useState<AdminSignupRequest[]>([]);
   const [signupRequestsLoading, setSignupRequestsLoading] = useState(false);
   const [signupRequestsError, setSignupRequestsError] = useState('');
@@ -723,23 +710,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     a.click();
   };
 
-  const handleTestAndSaveSupabase = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSupaTesting(true);
-    setSupaResult(null);
-
-    const res = await testSupabaseConnection(supaUrl, supaKey);
-    setSupaResult(res);
-    setSupaTesting(false);
-
-    if (res.success) {
-      saveStoredSupabaseConfig(supaUrl, supaKey);
-      onRefreshData();
-    }
-  };
-
-  const sampleSqlScript = schemaSql;
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950 flex flex-col animate-in fade-in duration-200">
       {/* Top Admin Header Bar */}
@@ -926,18 +896,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
             <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 px-3 pt-4 pb-1 hidden md:block">
               Technical & Access
             </div>
-
-            <button
-              onClick={() => setActiveTab('supabase')}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-left whitespace-nowrap ${
-                activeTab === 'supabase'
-                  ? 'bg-amber-500 text-stone-950 font-bold'
-                  : 'text-stone-300 hover:bg-stone-900 hover:text-white'
-              }`}
-            >
-              <Database className="w-4 h-4 text-emerald-400" />
-              <span>Supabase Database</span>
-            </button>
 
             <button
               onClick={() => setActiveTab('staff')}
@@ -2100,113 +2058,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
             </div>
           )}
 
-          {/* TAB 7: SUPABASE DATABASE CONFIGURATION (ADMIN ONLY) */}
-          {activeTab === 'supabase' && (
-            <div className="max-w-4xl space-y-6">
-              <div className="pb-2 border-b border-stone-800">
-                <div className="flex items-center gap-2">
-                  <Database className="w-5 h-5 text-emerald-400" />
-                  <h2 className="font-serif text-2xl font-bold text-white">
-                    Supabase Database & Cloud Backend
-                  </h2>
-                </div>
-                <p className="text-xs text-stone-400 mt-1">
-                  Manage your real Supabase PostgreSQL connection here away from client view.
-                </p>
-                <p className="text-[11px] text-stone-500 mt-1">When deployment environment settings are configured, they take precedence over browser-saved settings.</p>
-              </div>
-
-              <form
-                onSubmit={handleTestAndSaveSupabase}
-                className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4"
-              >
-                <div>
-                  <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider mb-1">
-                    Supabase Project URL
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="https://your-project-id.supabase.co"
-                    value={supaUrl}
-                    onChange={e => setSupaUrl(e.target.value)}
-                    className="w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider mb-1">
-                    Supabase Publishable / Anon Public Key
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="sb_publishable_… or legacy anon JWT"
-                    value={supaKey}
-                    onChange={e => setSupaKey(e.target.value)}
-                    className="w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                  <p className="mt-1 text-[11px] text-amber-300">Never enter a secret key or service-role key here. They are blocked by this app.</p>
-                </div>
-
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="submit"
-                    disabled={supaTesting}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
-                  >
-                    <Database className="w-4 h-4" />
-                    <span>{supaTesting ? 'Testing Supabase...' : 'Test & Save Supabase Keys'}</span>
-                  </button>
-                </div>
-
-                {supaResult && (
-                  <div
-                    className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
-                      supaResult.success
-                        ? 'bg-emerald-950 border-emerald-800 text-emerald-200'
-                        : 'bg-red-950 border-red-800 text-red-200'
-                    }`}
-                  >
-                    {supaResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    )}
-                    <span>{supaResult.message}</span>
-                  </div>
-                )}
-              </form>
-
-              {/* PostgreSQL Schema Script */}
-              <div className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-serif text-base font-bold text-white">
-                      PostgreSQL Migration Script
-                    </h3>
-                    <p className="text-xs text-stone-400">
-                      Paste and run in your Supabase SQL Editor.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(sampleSqlScript);
-                      setCopiedSql(true);
-                      setTimeout(() => setCopiedSql(false), 2500);
-                    }}
-                    className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded-lg text-xs font-semibold text-stone-200 flex items-center gap-1.5"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>{copiedSql ? 'Copied!' : 'Copy Script'}</span>
-                  </button>
-                </div>
-
-                <pre className="p-4 bg-stone-900 text-stone-300 rounded-xl text-xs font-mono overflow-x-auto max-h-[250px] leading-relaxed border border-stone-800">
-                  {sampleSqlScript}
-                </pre>
-              </div>
-            </div>
-          )}
-
           {/* TAB 8: STAFF ACCOUNTS */}
           {activeTab === 'staff' && (
             <div className="max-w-4xl space-y-6">
@@ -2287,7 +2138,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
               <div className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-3 text-xs text-stone-300">
                 <h3 className="font-semibold text-white">Enable secure staff signup</h3>
                 <ol className="list-decimal pl-5 space-y-2">
-                  <li>Run the current security schema from the Supabase Database tab in the Supabase SQL Editor.</li>
+                  <li>Ask the deployment administrator to apply the current Supabase migration before enabling staff access.</li>
                   <li>In Supabase Authentication settings, enable email sign-ups and configure email OTP delivery. Set the email template to include <code className="text-amber-300">{'{{ .Token }}'}</code>.</li>
                   <li>Staff can request access from the sign-in screen. Their email must be verified, and only an active admin can assign a role.</li>
                   <li>For the first administrator only, create the Auth user and add its active <code className="text-amber-300">admin_users</code> profile in the SQL Editor.</li>
