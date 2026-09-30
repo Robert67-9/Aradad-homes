@@ -19,6 +19,8 @@ Set these two secrets in the Supabase Dashboard under **Edge Function Secrets**:
 
 - `PAYSTACK_SECRET_KEY`: start with the Paystack test key.
 - `APP_PUBLIC_URL`: the exact HTTPS URL of the deployed website.
+- `RESEND_API_KEY`: the Resend API key used for guest booking emails.
+- `RESEND_FROM_EMAIL`: a verified Resend sender, such as `Aradad Homes <bookings@your-domain.com>`.
 
 Supabase supplies the Edge Functions' own Supabase credentials. Do not copy a Supabase secret key into the website environment or a `VITE_` variable.
 
@@ -28,6 +30,7 @@ Deploy the payment functions:
 npx supabase functions deploy paystack-initialize
 npx supabase functions deploy paystack-verify
 npx supabase functions deploy paystack-webhook
+npx supabase functions deploy booking-confirmation
 ```
 
 The initialize and verify functions accept the browser's publishable key and perform reservation/payment checks server-side. The webhook verifies Paystack's signature before recording events. Their `verify_jwt = false` configuration is in `supabase/config.toml`.

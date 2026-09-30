@@ -681,6 +681,24 @@ export async function initializePaystackCheckout(booking: Pick<Booking, 'id' | '
   }
 }
 
+export async function sendBookingConfirmationEmail(booking: Pick<Booking, 'id' | 'bookingCode' | 'guestEmail'>): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+  try {
+    const { data, error } = await client.functions.invoke('booking-confirmation', {
+      body: { bookingId: booking.id, bookingCode: booking.bookingCode, guestEmail: booking.guestEmail },
+    });
+    if (error || !data?.success) {
+      console.warn('Booking confirmation email was not sent:', data?.error || error?.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn('Booking confirmation email request failed:', error);
+    return false;
+  }
+}
+
 export async function verifyPaystackCheckout(reference: string): Promise<{
   success: boolean;
   bookingCode?: string;

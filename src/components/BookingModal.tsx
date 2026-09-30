@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Unit, Room, Currency, PaymentPreference, PaymentGateway, Booking, SiteSettings } from '../lib/types';
 import { calculateNights, formatDatePretty, getRoomMonthlyRate, getRoomWeeklyRate, USD_TO_GHS_RATE } from '../lib/utils';
-import { createBooking, initializePaystackCheckout } from '../lib/supabase';
+import { createBooking, initializePaystackCheckout, sendBookingConfirmationEmail } from '../lib/supabase';
 import { AradadLogo } from './AradadLogo';
 import {
   X,
@@ -214,6 +214,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         }
         setConfirmedBooking(res.data);
         onBookingSuccess(res.data);
+        void sendBookingConfirmationEmail(res.data);
         setStep(4);
         try {
           confetti({

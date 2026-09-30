@@ -45,9 +45,11 @@ Staff settings are shared through Supabase. Public visitors can read the guest-f
 
 Online card and Mobile Money payments are initialized and verified by Supabase Edge Functions. The Paystack secret key must stay on the server.
 
-1. In the Supabase Dashboard's Edge Function Secrets settings, set `PAYSTACK_SECRET_KEY` and `APP_PUBLIC_URL`. Use a Paystack test secret while testing, then replace it with the live secret when the merchant account is ready. Set `APP_PUBLIC_URL` to the exact HTTPS website URL. Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to deployed Edge Functions. Keep the production secret separate from `supabase/functions/.env`, which is for local development.
-2. Deploy `paystack-initialize`, `paystack-verify`, and `paystack-webhook` from `supabase/functions` with the Supabase CLI. The included `supabase/config.toml` disables gateway JWT checks for these public endpoints; the functions validate booking identity, payment references, transaction amounts, and webhook signatures themselves.
+1. In the Supabase Dashboard's Edge Function Secrets settings, set `PAYSTACK_SECRET_KEY`, `APP_PUBLIC_URL`, `RESEND_API_KEY`, and a verified `RESEND_FROM_EMAIL`. Use a Paystack test secret while testing, then replace it with the live secret when the merchant account is ready. Set `APP_PUBLIC_URL` to the exact HTTPS website URL. Supabase supplies `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to deployed Edge Functions. Keep the production secrets separate from `supabase/functions/.env`, which is for local development.
+2. Deploy `paystack-initialize`, `paystack-verify`, `paystack-webhook`, and `booking-confirmation` from `supabase/functions` with the Supabase CLI. The included `supabase/config.toml` disables gateway JWT checks for these public endpoints; the functions validate booking identity, payment references, transaction amounts, and webhook signatures themselves.
 3. In the Paystack Dashboard, set the webhook URL to `https://YOUR_PROJECT_REF.supabase.co/functions/v1/paystack-webhook`.
+
+Booking confirmations are sent after a reservation is saved, and after Paystack verification for online payments. Missing email configuration does not cancel a valid reservation, but no email is sent until the Resend secrets and function deployment are complete.
 
 Until the Supabase SQL and Edge Functions are deployed with valid Paystack credentials, checkout cannot take payments. The app reports that state and does not claim that an unpaid reservation is confirmed.
 

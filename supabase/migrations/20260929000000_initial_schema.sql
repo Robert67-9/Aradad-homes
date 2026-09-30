@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   payment_status TEXT NOT NULL DEFAULT 'pending', booking_status TEXT NOT NULL DEFAULT 'pending_approval',
   special_requests TEXT, id_document_url TEXT, guest_ip TEXT,
   payment_reference TEXT, payment_authorization_url TEXT, payment_initiated_at TIMESTAMPTZ,
-  payment_hold_expires_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  payment_hold_expires_at TIMESTAMPTZ, confirmation_email_sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS room_id TEXT REFERENCES public.rooms(id);
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS check_in_time TEXT NOT NULL DEFAULT '15:00';
@@ -92,6 +93,7 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_authorization_url TEXT;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_initiated_at TIMESTAMPTZ;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_hold_expires_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS confirmation_email_sent_at TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_payment_reference_unique_idx
   ON public.bookings(payment_reference) WHERE payment_reference IS NOT NULL;
 -- Legacy four-digit references were enumerable; replace them with unguessable references.

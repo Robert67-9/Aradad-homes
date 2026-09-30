@@ -1,4 +1,5 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
+import { sendBookingConfirmationEmail } from './booking-email.ts';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -208,7 +209,11 @@ export async function verifyAndRecordPayment(admin: SupabaseClient, reference: s
     .select('booking_code,booking_status')
     .maybeSingle();
   if (updateError) throw new Error('Payment was verified, but the reservation record could not be updated.');
-  if (updated) return { success: true, bookingCode: updated.booking_code, bookingStatus: updated.booking_status };
+  if (updated) {
+    const emailResult = await sendBookingConfirmationEmail(admin, booking.id, booking.booking_code, booking.guest_email);
+    if (!emailResult.sent) console.warn('Paystack payment verified but booking email was not sent:', emailResult.error);
+    return { success: true, bookingCode: updated.booking_code, bookingStatus: updated.booking_status };
+  }
 
   const { data: current, error: currentError } = await admin.from('bookings')
     .select('booking_code,booking_status,payment_status,payment_hold_expires_at')
@@ -216,6 +221,8 @@ export async function verifyAndRecordPayment(admin: SupabaseClient, reference: s
     .maybeSingle();
   if (currentError) throw new Error('The reservation changed while the payment was being verified. Contact Aradad Homes.');
   if (current?.payment_status === 'paid') {
+    const emailResult = await sendBookingConfirmationEmail(admin, booking.id, current.booking_code, booking.guest_email);
+    if (!emailResult.sent) console.warn('Paystack payment verified but booking email was not sent:', emailResult.error);
     return { success: true, bookingCode: current.booking_code, bookingStatus: current.booking_status };
   }
   const currentHoldExpired = !current?.payment_hold_expires_at
