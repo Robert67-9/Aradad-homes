@@ -2020,8 +2020,10 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                       <input
                         type="text"
                         value={settingsForm.poweredBy}
-                        onChange={e => setSettingsForm({ ...settingsForm, poweredBy: e.target.value })}
-                        className="w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white font-semibold"
+                        readOnly
+                        aria-readonly="true"
+                        title="Engineering attribution is managed by the platform and cannot be changed here."
+                        className="w-full cursor-not-allowed bg-stone-950 border border-stone-800 rounded-lg px-3 py-2 text-sm text-stone-500 font-semibold"
                       />
                     </div>
                   </div>
