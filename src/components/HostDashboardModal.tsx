@@ -2010,7 +2010,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                       <Lock className="w-4 h-4 text-amber-400" />
                       Change Admin Password
                     </h3>
-                    <p className="text-xs text-stone-400 mt-1">Set a new password for your signed-in administrator account.</p>
+                    <p className="text-xs text-stone-400 mt-1">Set a new password for {currentUser.email}.</p>
                   </div>
 
                   {passwordSavedToast && <p role="status" className="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-xs text-emerald-200">Password updated successfully.</p>}
@@ -2522,7 +2522,7 @@ WHERE email = lower('person@example.com');`}</pre>
       {/* Room Add / Edit Modal */}
       {isRoomModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full p-6 text-stone-200 my-8 shadow-2xl">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-contain p-6 text-stone-200 my-auto shadow-2xl">
             <div className="flex items-center justify-between pb-4 border-b border-stone-800 mb-6">
               <div>
                 <h3 className="font-serif text-xl font-bold text-white flex items-center gap-2">
