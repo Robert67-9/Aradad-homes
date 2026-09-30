@@ -1,8 +1,20 @@
+import { createClient } from 'npm:@supabase/supabase-js';
 import { withSupabase } from 'npm:@supabase/server';
 import { jsonResponse } from '../_shared/paystack.ts';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const roles = new Set(['admin', 'manager', 'staff']);
+
+function getServiceClient() {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 export default {
   fetch: withSupabase({ auth: 'user' }, async (request, ctx) => {
@@ -32,7 +44,24 @@ export default {
       if (password.length < 8) return jsonResponse({ error: 'The temporary password must be at least 8 characters.' }, 400);
       if (!roles.has(role)) return jsonResponse({ error: 'Choose a valid management role.' }, 400);
 
-      const { data: created, error: createError } = await ctx.supabaseAdmin.auth.admin.createUser({
+      const adminClient = getServiceClient() ?? ctx.supabaseAdmin;
+      if (!adminClient) {
+        return jsonResponse({ error: 'This server is missing the authentication service configuration.' }, 500);
+      }
+
+      const { data: existingUser, error: lookupError } = await adminClient
+        .from('admin_users')
+        .select('user_id')
+        .eq('email', email)
+        .maybeSingle();
+      if (lookupError) {
+        console.error('Admin staff lookup failed:', lookupError);
+      }
+      if (existingUser) {
+        return jsonResponse({ error: 'An account with this email already exists in the management portal.' }, 409);
+      }
+
+      const { data: created, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
@@ -42,7 +71,7 @@ export default {
         return jsonResponse({ error: createError?.message || 'Could not create the Auth account.' }, 409);
       }
 
-      const { error: profileError } = await ctx.supabaseAdmin.from('admin_users').insert({
+      const { error: profileError } = await adminClient.from('admin_users').insert({
         user_id: created.user.id,
         email,
         full_name: fullName,
@@ -50,8 +79,8 @@ export default {
         is_active: true,
       });
       if (profileError) {
-        await ctx.supabaseAdmin.auth.admin.deleteUser(created.user.id);
-        return jsonResponse({ error: 'The account was created but its management profile could not be saved.' }, 500);
+        await adminClient.auth.admin.deleteUser(created.user.id).catch(() => undefined);
+        return jsonResponse({ error: 'The account was created but its management profile could not be saved. Try a different email or contact support.' }, 500);
       }
 
       return jsonResponse({ success: true, email, role });

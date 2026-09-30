@@ -26,7 +26,7 @@ import {
   reviewAdminSignupRequest,
   verifyPaystackCheckout,
 } from '../lib/supabase';
-import { AuthUser, createStaffAccount, fetchStaffAccounts } from '../lib/auth';
+import { AuthUser, createStaffAccount, fetchStaffAccounts, toggleStaffAccountStatus } from '../lib/auth';
 import { BEDROOM_SUITE_IMAGE, LIVING_ROOM_IMAGE, MODERN_KITCHEN_IMAGE } from '../lib/imageAssets';
 import { AradadLogo } from './AradadLogo';
 import {
@@ -226,6 +226,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   const [staffAccounts, setStaffAccounts] = useState<AuthUser[]>([]);
   const [staffAccountsLoading, setStaffAccountsLoading] = useState(false);
   const [staffAccountsError, setStaffAccountsError] = useState('');
+  const [actioningStaffAccountId, setActioningStaffAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'staff' || currentUser.role !== 'admin') return;
@@ -276,6 +277,23 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       setStaffCreateMessage({ success: false, text: result.error || 'Could not create the management account.' });
     }
     setIsCreatingStaff(false);
+  };
+
+  const handleToggleStaffAccount = async (account: AuthUser) => {
+    setActioningStaffAccountId(account.id);
+    setStaffAccountsError('');
+    const nextActive = !account.isActive;
+    const result = await toggleStaffAccountStatus(account.id, nextActive);
+    if (result.success) {
+      setStaffAccounts(previous => previous.map(item => item.id === account.id ? { ...item, isActive: nextActive } : item));
+      setStaffCreateMessage({
+        success: true,
+        text: nextActive ? 'Management account reactivated.' : 'Management account deactivated. They can no longer access the portal.',
+      });
+    } else {
+      setStaffAccountsError(result.error || 'Could not update this management account.');
+    }
+    setActioningStaffAccountId(null);
   };
 
   // Key metrics
@@ -2201,14 +2219,14 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                         <p className="text-xs text-stone-400 mt-1">Active staff and administrators who can access the portal.</p>
                       </div>
                       <span className="px-2.5 py-1 rounded-full bg-stone-900 text-stone-300 border border-stone-800 text-xs font-semibold">
-                        {staffAccounts.length} active
+                        {staffAccounts.filter(account => account.isActive).length} active
                       </span>
                     </div>
                     {staffAccountsError && <div role="alert" className="p-3 bg-red-950/70 border border-red-900 rounded-lg text-xs text-red-200">{staffAccountsError}</div>}
                     {staffAccountsLoading ? (
                       <p className="text-xs text-stone-400 py-4">Loading management accounts…</p>
                     ) : staffAccounts.length === 0 ? (
-                      <p className="text-xs text-stone-400 py-4">No active management accounts found.</p>
+                      <p className="text-xs text-stone-400 py-4">No management accounts found.</p>
                     ) : (
                       <div className="divide-y divide-stone-800 border border-stone-800 rounded-lg">
                         {staffAccounts.map(account => (
@@ -2217,9 +2235,22 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                               <div className="font-semibold text-white truncate">{account.name}</div>
                               <div className="text-xs text-stone-400 break-all">{account.email}</div>
                             </div>
-                            <span className="self-start sm:self-auto px-2 py-1 rounded bg-amber-950 text-amber-300 text-[10px] font-bold uppercase">
-                              {account.role === 'admin' ? 'Co-admin' : account.role}
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`self-start sm:self-auto px-2 py-1 rounded text-[10px] font-bold uppercase ${account.isActive ? 'bg-emerald-950 text-emerald-300' : 'bg-stone-800 text-stone-300'}`}>
+                                {account.isActive ? 'Active' : 'Inactive'}
+                              </span>
+                              <span className="self-start sm:self-auto px-2 py-1 rounded bg-amber-950 text-amber-300 text-[10px] font-bold uppercase">
+                                {account.role === 'admin' ? 'Co-admin' : account.role}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStaffAccount(account)}
+                                disabled={actioningStaffAccountId === account.id}
+                                className="px-2.5 py-1.5 rounded border border-stone-700 bg-stone-900 text-[10px] font-bold uppercase text-white hover:border-stone-500 disabled:opacity-50"
+                              >
+                                {actioningStaffAccountId === account.id ? 'Updating…' : account.isActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

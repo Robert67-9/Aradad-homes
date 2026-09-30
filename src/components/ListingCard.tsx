@@ -43,7 +43,18 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   return (
     <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
       {/* Image Gallery Container */}
-      <div className="relative aspect-[16/10] bg-stone-100 overflow-hidden group">
+      <div
+        className="relative aspect-[16/10] bg-stone-100 overflow-hidden group cursor-pointer"
+        onClick={() => onViewDetails(unit)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onViewDetails(unit);
+          }
+        }}
+      >
         <img
           src={unit.images[activeImageIndex]}
           alt={`${unit.title} - View ${activeImageIndex + 1}`}

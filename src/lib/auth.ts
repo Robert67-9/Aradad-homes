@@ -7,6 +7,7 @@ export interface AuthUser {
   role: 'admin' | 'manager' | 'staff';
   phone?: string;
   title?: string;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -21,6 +22,7 @@ function mapAdminProfile(profile: any): AuthUser | null {
     role: profile.role,
     phone: profile.phone || undefined,
     title: profile.title || undefined,
+    isActive: profile.is_active !== false,
     createdAt: profile.created_at,
   };
 }
@@ -213,6 +215,27 @@ export async function fetchStaffAccounts(): Promise<AuthUser[]> {
     .order('created_at', { ascending: true });
   if (error) throw new Error('Could not load management accounts.');
   return (data || []).map(mapAdminProfile).filter((user): user is AuthUser => Boolean(user));
+}
+
+export async function toggleStaffAccountStatus(userId: string, nextActive: boolean): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Secure staff management is not configured.' };
+
+  const current = await getCurrentUser();
+  if (current && current.id === userId && !nextActive) {
+    return { success: false, error: 'You cannot deactivate your own management account while you are signed in.' };
+  }
+
+  const { error } = await client
+    .from('admin_users')
+    .update({ is_active: nextActive })
+    .eq('user_id', userId);
+
+  if (error) {
+    return { success: false, error: error.message || 'Could not update this management account.' };
+  }
+
+  return { success: true };
 }
 
 export async function logout(): Promise<void> {
