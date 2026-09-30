@@ -1,6 +1,6 @@
 ﻿import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AdminSignupRequest, Booking, Unit, Room, BlockedDate, SupabaseConfig, SiteSettings } from './types';
-import { INITIAL_UNITS, DEFAULT_SITE_SETTINGS } from './mockData';
+import { APARTMENT_DATA, INITIAL_UNITS, DEFAULT_SITE_SETTINGS } from './mockData';
 import { resolveImageUrls } from './imageAssets';
 
 const STORAGE_KEYS = {
@@ -151,22 +151,25 @@ export async function testSupabaseConnection(url: string, anonKey: string): Prom
 
 // Local Storage Helper for local mode
 // Data API: Get all listings/units
-export async function fetchUnits(): Promise<Unit[]> {
+export async function fetchUnits(includeInactive = false): Promise<Unit[]> {
   const client = getSupabaseClient();
   if (client) {
     try {
-      const { data, error } = await client.from('units').select('*').eq('is_active', true);
+      let unitsQuery = client.from('units').select('*');
+      if (!includeInactive) unitsQuery = unitsQuery.eq('is_active', true);
+      const { data, error } = await unitsQuery;
       if (error) {
         console.warn('Could not fetch units from Supabase:', error.message);
         return [];
       }
       if (!error && data) {
         if (data.length === 0) return [];
-        const { data: roomRows, error: roomError } = await client
+        let roomsQuery = client
           .from('rooms')
           .select('*')
-          .in('unit_id', data.map((item: any) => item.id))
-          .eq('is_active', true);
+          .in('unit_id', data.map((item: any) => item.id));
+        if (!includeInactive) roomsQuery = roomsQuery.eq('is_active', true);
+        const { data: roomRows, error: roomError } = await roomsQuery;
         if (roomError) console.warn('Could not fetch individual rooms from Supabase:', roomError.message);
         const roomsByUnit = new Map<string, Room[]>();
         (roomRows || []).forEach((room: any) => {
@@ -282,20 +285,35 @@ function mapRoomToDatabase(room: Room): Record<string, unknown> {
 }
 
 // Add New Apartment / Room Unit
-export async function createUnit(unitData: Omit<Unit, 'id'>): Promise<Unit> {
+export async function createUnit(unitData: Omit<Unit, 'id'>, initializeApartment = false): Promise<Unit> {
   const newId = 'unit_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
   const fullUnit: Unit = {
     ...unitData,
     id: newId,
   };
-  const list = getLocalUnits();
-  const updated = [fullUnit, ...list];
-  saveLocalUnits(updated);
-
   const client = getSupabaseClient();
   if (client) {
     try {
-      await client.from('units').insert({
+      if (initializeApartment) {
+        const { error: apartmentError } = await client.from('apartments').upsert({
+          id: fullUnit.apartmentId,
+          name: APARTMENT_DATA.name,
+          address: APARTMENT_DATA.address,
+          city: APARTMENT_DATA.city,
+          neighborhood: APARTMENT_DATA.neighborhood,
+          country: APARTMENT_DATA.country,
+          landmarks: APARTMENT_DATA.landmarks,
+          owner_name: APARTMENT_DATA.ownerName,
+          owner_phone: APARTMENT_DATA.ownerPhone,
+          owner_email: APARTMENT_DATA.ownerEmail,
+          payout_acc_name: APARTMENT_DATA.payoutAccount.name,
+          payout_acc_number: APARTMENT_DATA.payoutAccount.number,
+          payout_branch: APARTMENT_DATA.payoutAccount.branch,
+          payout_swift_code: APARTMENT_DATA.payoutAccount.swiftCode,
+        }, { onConflict: 'id', ignoreDuplicates: true });
+        if (apartmentError) throw new Error(apartmentError.message);
+      }
+      const { error } = await client.from('units').insert({
         id: fullUnit.id,
         apartment_id: fullUnit.apartmentId,
         title: fullUnit.title,
@@ -321,10 +339,13 @@ export async function createUnit(unitData: Omit<Unit, 'id'>): Promise<Unit> {
         images: fullUnit.images,
         is_active: fullUnit.isActive,
       });
+      if (error) throw new Error(error.message);
     } catch (e) {
-      console.warn('Supabase createUnit notice (cached locally):', e);
+      throw e instanceof Error ? e : new Error('Unit could not be saved.');
     }
   }
+  const list = getLocalUnits();
+  saveLocalUnits([fullUnit, ...list]);
   return fullUnit;
 }
 

@@ -52,7 +52,7 @@ export default function App() {
   const loadData = async () => {
     try {
       const [loadedUnits, loadedBookings, loadedBlocked, loadedSettings] = await Promise.all([
-        fetchUnits(),
+        fetchUnits(Boolean(currentUser)),
         fetchBookings(),
         fetchBlockedDates(),
         fetchSiteSettings(),
