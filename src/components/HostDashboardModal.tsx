@@ -2135,27 +2135,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                   Access requests can only be reviewed by an active administrator.
                 </div>
               )}
-              <div className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-3 text-xs text-stone-300">
-                <h3 className="font-semibold text-white">Enable secure staff signup</h3>
-                <ol className="list-decimal pl-5 space-y-2">
-                  <li>Ask the deployment administrator to apply the current Supabase migration before enabling staff access.</li>
-                  <li>In Supabase Authentication settings, enable email sign-ups and configure email OTP delivery. Set the email template to include <code className="text-amber-300">{'{{ .Token }}'}</code>.</li>
-                  <li>Staff can request access from the sign-in screen. Their email must be verified, and only an active admin can assign a role.</li>
-                  <li>For the first administrator only, create the Auth user and add its active <code className="text-amber-300">admin_users</code> profile in the SQL Editor.</li>
-                </ol>
-                <pre className="overflow-x-auto rounded-lg bg-black p-4 text-[11px] text-emerald-200">{`INSERT INTO public.admin_users (user_id, email, full_name, role, is_active)
-SELECT id, lower(email), 'First Admin Name', 'admin', true
-FROM auth.users
-WHERE lower(email) = lower('first-admin@example.com')
-ON CONFLICT (user_id) DO UPDATE SET
-  email = EXCLUDED.email,
-  full_name = EXCLUDED.full_name,
-  role = EXCLUDED.role,
-  is_active = true;`}</pre>
-                <p className="text-stone-400">Disable access immediately by setting <code className="text-amber-300">is_active = false</code> on that person’s <code className="text-amber-300">admin_users</code> row, then revoke their Supabase Auth sessions.</p>
-                <pre className="overflow-x-auto rounded-lg bg-black p-4 text-[11px] text-amber-200">{`UPDATE public.admin_users SET is_active = false
-WHERE email = lower('person@example.com');`}</pre>
-              </div>
             </div>
           )}
         </main>
