@@ -24,6 +24,7 @@ import {
   saveSiteSettings,
   fetchAdminSignupRequests,
   reviewAdminSignupRequest,
+  verifyPaystackCheckout,
 } from '../lib/supabase';
 import { AuthUser } from '../lib/auth';
 import { BEDROOM_SUITE_IMAGE, LIVING_ROOM_IMAGE, MODERN_KITCHEN_IMAGE } from '../lib/imageAssets';
@@ -327,6 +328,19 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     const updated = await updateBookingStatus(bookingId, { bookingStatus, paymentStatus, refundedAmount });
     if (!updated) {
       alert('Could not update that reservation. Check your management access and try again.');
+      return;
+    }
+    onRefreshData();
+  };
+
+  const handleVerifyPaystackPayment = async (booking: Booking) => {
+    if (!booking.paymentReference) {
+      alert('This reservation does not have a Paystack reference yet. Ask the guest to complete checkout or retry payment.');
+      return;
+    }
+    const result = await verifyPaystackCheckout(booking.paymentReference);
+    if (!result.success) {
+      alert(result.error || 'Paystack has not confirmed this payment yet.');
       return;
     }
     onRefreshData();
@@ -1277,6 +1291,15 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {b.paymentGateway === 'paystack' && b.paymentStatus !== 'paid' && b.paymentReference && (
+                                <button
+                                  onClick={() => void handleVerifyPaystackPayment(b)}
+                                  title="Verify this Paystack payment"
+                                  className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-700 hover:bg-emerald-600 text-white rounded"
+                                >
+                                  Verify Pay
+                                </button>
+                              )}
                               {b.bookingStatus === 'pending_approval' && (
                                 <button
                                   onClick={() => handleUpdateStatus(b.id, 'confirmed')}

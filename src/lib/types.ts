@@ -108,6 +108,7 @@ export interface Booking {
   currency: string;
   paymentPreference: PaymentPreference;
   paymentGateway: PaymentGateway;
+  paymentReference?: string;
   paymentStatus:
     | 'pending'
     | 'verified'

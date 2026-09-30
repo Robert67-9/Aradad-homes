@@ -569,6 +569,7 @@ function mapBookingRecord(b: any): Booking {
     currency: b.currency,
     paymentPreference: b.payment_preference,
     paymentGateway: b.payment_gateway,
+    paymentReference: b.payment_reference || undefined,
     paymentStatus: b.payment_status,
     bookingStatus: b.booking_status,
     specialRequests: b.special_requests || '',
@@ -599,7 +600,7 @@ export async function fetchBookings(): Promise<Booking[]> {
   if (!client) return [];
   try {
     const { data, error } = await client.from('bookings')
-      .select('id,booking_code,unit_id,room_id,unit_name,guest_name,guest_email,guest_phone,guest_count,check_in_date,check_out_date,check_in_time,check_out_time,nights,nightly_rate,subtotal_amount,security_deposit,total_amount,refunded_amount,currency,payment_preference,payment_gateway,payment_status,booking_status,special_requests,created_at')
+      .select('id,booking_code,unit_id,room_id,unit_name,guest_name,guest_email,guest_phone,guest_count,check_in_date,check_out_date,check_in_time,check_out_time,nights,nightly_rate,subtotal_amount,security_deposit,total_amount,refunded_amount,currency,payment_preference,payment_gateway,payment_reference,payment_status,booking_status,special_requests,created_at')
       .order('created_at', { ascending: false });
     if (error) {
       console.warn('Bookings are available only to active staff accounts:', error.message);
