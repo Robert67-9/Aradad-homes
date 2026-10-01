@@ -290,6 +290,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
         success: true,
         text: nextActive ? 'Management account reactivated.' : 'Management account deactivated. They can no longer access the portal.',
       });
+      onRefreshData();
     } else {
       setStaffAccountsError(result.error || 'Could not update this management account.');
     }
@@ -736,6 +737,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       onUpdateSiteSettings?.(updated);
       setSettingsForm(updated);
       setSettingsSavedToast(true);
+      onRefreshData();
       setTimeout(() => setSettingsSavedToast(false), 3000);
     } catch (error) {
       setSettingsSaveError(error instanceof Error ? error.message : 'Site settings could not be saved.');

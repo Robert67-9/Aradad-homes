@@ -101,6 +101,7 @@ export default function App() {
     void verifyPaystackCheckout(reference).then(result => {
       if (result.success) {
         setPaystackReturn({ status: 'verified', reference, bookingCode: result.bookingCode, bookingStatus: result.bookingStatus });
+        window.location.reload();
       } else {
         setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
       }
@@ -114,6 +115,7 @@ export default function App() {
     const result = await verifyPaystackCheckout(reference);
     if (result.success) {
       setPaystackReturn({ status: 'verified', reference, bookingCode: result.bookingCode, bookingStatus: result.bookingStatus });
+      window.location.reload();
     } else {
       setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
     }
@@ -161,6 +163,7 @@ export default function App() {
 
   const handleBookingSuccess = (newBooking: Booking) => {
     setBookings(prev => [newBooking, ...prev]);
+    window.location.reload();
   };
 
   // Handle protected admin portal access
@@ -417,7 +420,7 @@ export default function App() {
           isOpen={isHostDashboardOpen}
           onClose={() => setIsHostDashboardOpen(false)}
           onLogout={handleLogout}
-          onRefreshData={loadData}
+          onRefreshData={() => window.location.reload()}
           siteSettings={siteSettings}
           onUpdateSiteSettings={newSettings => setSiteSettings(newSettings)}
         />
