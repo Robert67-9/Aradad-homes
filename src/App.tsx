@@ -68,8 +68,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [currentUser]);
 
   // Staff login remains available through a private bookmark, without a public navigation link.
   useEffect(() => {

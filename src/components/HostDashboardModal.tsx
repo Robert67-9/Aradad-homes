@@ -73,7 +73,7 @@ interface HostDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogout: () => void;
-  onRefreshData: () => void;
+  onRefreshData: () => Promise<void> | void;
   siteSettings?: SiteSettings;
   onUpdateSiteSettings?: (newSettings: SiteSettings) => void;
 }
@@ -696,8 +696,8 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       } else {
         await addRoomToUnit(roomParentUnitId, payload);
       }
+      await onRefreshData();
       setIsRoomModalOpen(false);
-      onRefreshData();
       alert(editingRoomId ? 'Room updated successfully!' : 'New room added to apartment successfully!');
     } catch (error) {
       console.error('Could not save room:', error);
