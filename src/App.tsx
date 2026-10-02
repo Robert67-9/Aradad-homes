@@ -53,7 +53,7 @@ export default function App() {
     try {
       const [loadedUnits, loadedBookings, loadedBlocked, loadedSettings] = await Promise.all([
         fetchUnits(Boolean(currentUser)),
-        fetchBookings(),
+        currentUser ? fetchBookings() : Promise.resolve([]),
         fetchBlockedDates(),
         fetchSiteSettings(),
       ]);
@@ -120,10 +120,6 @@ export default function App() {
       setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
     }
   };
-
-  useEffect(() => {
-    if (currentUser) void loadData();
-  }, [currentUser]);
 
   useEffect(() => {
     let isMounted = true;
