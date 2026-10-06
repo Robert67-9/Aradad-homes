@@ -74,7 +74,10 @@ export const Hero: React.FC<HeroProps> = ({
       blockedDates,
     );
     if (!isAvailable) {
-      setAvailabilityMessage({ status: 'unavailable', text: conflictReason || 'This room is unavailable for those dates.' });
+      setAvailabilityMessage({
+        status: 'unavailable',
+        text: `${conflictReason || 'This room is unavailable for those dates.'} You can still continue with your request and the host will confirm final availability.`,
+      });
       return;
     }
 
@@ -90,6 +93,22 @@ export const Hero: React.FC<HeroProps> = ({
 
   const handleBookNow = () => {
     if (selectedUnit && selectedRoom) {
+      const { isAvailable } = checkRoomAvailability(
+        selectedUnit.id,
+        selectedRoom.id,
+        checkIn,
+        checkOut,
+        bookings,
+        blockedDates,
+      );
+
+      if (!isAvailable) {
+        setAvailabilityMessage({
+          status: 'unavailable',
+          text: 'This date range is currently reserved. You can still submit your request and the host will confirm availability before finalizing the booking.',
+        });
+      }
+
       onSelectBooking(selectedUnit, selectedRoom, checkIn, checkOut, guestCount);
     }
   };
