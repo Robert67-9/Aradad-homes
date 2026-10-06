@@ -15,6 +15,9 @@ export function getCookie(name: string): string {
 
 export function setCookie(name: string, value: string, days = 30, path = '/'): void {
   if (typeof document === 'undefined') return;
+  if (!name || value.length > 3000) {
+    return;
+  }
   const expires = new Date();
   expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
   const cookieValue = encodeURIComponent(value);
@@ -37,9 +40,12 @@ export function writeStorageValue(key: string, value: string): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(key, value);
+    return;
   } catch {
-    // Fall back to cookie storage when browser storage is blocked or full.
-    setCookie(key, value, 30);
+    // Fall back to a small cookie only for compact values.
+    if (value.length <= 3000) {
+      setCookie(key, value, 30);
+    }
   }
 }
 
@@ -51,4 +57,14 @@ export function removeStorageValue(key: string): void {
     // noop
   }
   deleteCookie(key);
+}
+
+export function setVisibleTestCookie(): void {
+  if (typeof document === 'undefined') return;
+  setCookie('aradad_test_cookie', 'ok', 7);
+}
+
+export function clearVisibleTestCookie(): void {
+  if (typeof document === 'undefined') return;
+  deleteCookie('aradad_test_cookie');
 }

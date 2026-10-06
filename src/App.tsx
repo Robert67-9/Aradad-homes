@@ -1,9 +1,10 @@
-import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
 import { Unit, Room, Booking, BlockedDate, Currency, SiteSettings } from './lib/types';
 import { fetchUnits, fetchBookings, fetchBlockedDates, fetchSiteSettings, getSiteSettings, getSupabaseClient, verifyPaystackCheckout } from './lib/supabase';
 import { INITIAL_UNITS } from './lib/mockData';
 import { AuthUser, getCurrentUser, logout } from './lib/auth';
 import { formatCurrency, getRoomMonthlyRate, getRoomWeeklyRate } from './lib/utils';
+import { setVisibleTestCookie } from './lib/cookies';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { Users, Wifi, Zap } from 'lucide-react';
@@ -48,12 +49,12 @@ export default function App() {
   } | null>(null);
   const paystackReturnStarted = useRef(false);
 
-  // Load live data from Supabase or local storage on initial mount
-  const loadData = async () => {
+  // Load live data from Supabase or local storage when auth state changes.
+  const loadData = useCallback(async () => {
     try {
       const [loadedUnits, loadedBookings, loadedBlocked, loadedSettings] = await Promise.all([
         fetchUnits(Boolean(currentUser)),
-        currentUser ? fetchBookings() : Promise.resolve([]),
+        fetchBookings(),
         fetchBlockedDates(),
         fetchSiteSettings(),
       ]);
@@ -65,11 +66,11 @@ export default function App() {
     } catch (err) {
       console.warn('Data load warning:', err);
     }
-  };
+  }, [currentUser]);
 
   useEffect(() => {
     void loadData();
-  }, [currentUser]);
+  }, [loadData]);
 
   // Staff login remains available through a private bookmark, without a public navigation link.
   useEffect(() => {
@@ -101,7 +102,6 @@ export default function App() {
     void verifyPaystackCheckout(reference).then(result => {
       if (result.success) {
         setPaystackReturn({ status: 'verified', reference, bookingCode: result.bookingCode, bookingStatus: result.bookingStatus });
-        window.location.reload();
       } else {
         setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
       }
@@ -115,11 +115,14 @@ export default function App() {
     const result = await verifyPaystackCheckout(reference);
     if (result.success) {
       setPaystackReturn({ status: 'verified', reference, bookingCode: result.bookingCode, bookingStatus: result.bookingStatus });
-      window.location.reload();
     } else {
       setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
     }
   };
+
+  useEffect(() => {
+    setVisibleTestCookie();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -159,7 +162,6 @@ export default function App() {
 
   const handleBookingSuccess = (newBooking: Booking) => {
     setBookings(prev => [newBooking, ...prev]);
-    window.location.reload();
   };
 
   // Handle protected admin portal access
@@ -416,7 +418,7 @@ export default function App() {
           isOpen={isHostDashboardOpen}
           onClose={() => setIsHostDashboardOpen(false)}
           onLogout={handleLogout}
-          onRefreshData={() => window.location.reload()}
+          onRefreshData={loadData}
           siteSettings={siteSettings}
           onUpdateSiteSettings={newSettings => setSiteSettings(newSettings)}
         />
