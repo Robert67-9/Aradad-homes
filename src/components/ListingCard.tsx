@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Unit, Currency } from '../lib/types';
 import { formatCurrency } from '../lib/utils';
 import {
@@ -13,6 +13,7 @@ import {
   Sparkles,
   Info,
   Calendar,
+  X,
 } from 'lucide-react';
 
 interface ListingCardProps {
@@ -29,80 +30,106 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   onViewDetails,
 }) => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
-  const nextImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const nextImage = (e?: React.MouseEvent | React.TouchEvent) => {
+    e?.stopPropagation();
     setActiveImageIndex(prev => (prev + 1) % unit.images.length);
   };
 
-  const prevImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const prevImage = (e?: React.MouseEvent | React.TouchEvent) => {
+    e?.stopPropagation();
     setActiveImageIndex(prev => (prev - 1 + unit.images.length) % unit.images.length);
   };
 
+  const openGallery = (event?: React.MouseEvent | React.KeyboardEvent | React.TouchEvent) => {
+    event?.stopPropagation();
+    setIsGalleryOpen(true);
+  };
+
+  const handleTouchStart = (event: React.TouchEvent) => {
+    touchStartX.current = event.touches[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent) => {
+    if (touchStartX.current == null) return;
+    const deltaX = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(deltaX) < 40) return;
+    if (deltaX < 0) {
+      nextImage(event);
+    } else {
+      prevImage(event);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
-      {/* Image Gallery Container */}
-      <div
-        className="relative aspect-[16/10] bg-stone-100 overflow-hidden group cursor-pointer"
-        onClick={() => onViewDetails(unit)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={event => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onViewDetails(unit);
-          }
-        }}
-      >
-        <img
-          src={unit.images[activeImageIndex]}
-          alt={`${unit.title} - View ${activeImageIndex + 1}`}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-          referrerPolicy="no-referrer"
-        />
+    <>
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+        {/* Image Gallery Container */}
+        <div
+          className="relative aspect-[16/10] bg-stone-100 overflow-hidden group cursor-pointer"
+          onClick={openGallery}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          role="button"
+          tabIndex={0}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              openGallery(event);
+            }
+          }}
+        >
+          <img
+            src={unit.images[activeImageIndex]}
+            alt={`${unit.title} - View ${activeImageIndex + 1}`}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            referrerPolicy="no-referrer"
+          />
 
-        {/* Carousel arrows */}
-        {unit.images.length > 1 && (
-          <>
-            <button
-              onClick={prevImage}
-              aria-label="Previous image"
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={nextImage}
-              aria-label="Next image"
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </>
-        )}
+          {/* Carousel arrows */}
+          {unit.images.length > 1 && (
+            <>
+              <button
+                onClick={prevImage}
+                aria-label="Previous image"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={nextImage}
+                aria-label="Next image"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/75"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </>
+          )}
 
-        {/* Image dot indicators */}
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40 backdrop-blur-xs">
-          {unit.images.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={e => {
-                e.stopPropagation();
-                setActiveImageIndex(idx);
-              }}
-              className={`w-1.5 h-1.5 rounded-full transition-all ${
-                idx === activeImageIndex ? 'w-4 bg-amber-400' : 'bg-white/60'
-              }`}
-            />
-          ))}
+          {/* Image dot indicators */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40 backdrop-blur-xs">
+            {unit.images.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={e => {
+                  e.stopPropagation();
+                  setActiveImageIndex(idx);
+                }}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${
+                  idx === activeImageIndex ? 'w-4 bg-amber-400' : 'bg-white/60'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Property Type unboxed indicator */}
+          <div className="absolute top-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-xs font-semibold px-2.5 py-1 rounded">
+            {unit.propertyType}
+          </div>
         </div>
-
-        {/* Property Type unboxed indicator */}
-        <div className="absolute top-3 left-3 bg-stone-900/80 backdrop-blur-xs text-white text-xs font-semibold px-2.5 py-1 rounded">
-          {unit.propertyType}
-        </div>
-      </div>
 
       {/* Content Area */}
       <div className="p-6 flex-1 flex flex-col justify-between">
@@ -188,6 +215,89 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           </div>
         </div>
       </div>
-    </div>
+
+      {isGalleryOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-8"
+          onClick={() => setIsGalleryOpen(false)}
+        >
+          <div className="relative w-full max-w-5xl" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setIsGalleryOpen(false)}
+              aria-label="Close gallery"
+              className="absolute -top-3 right-0 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white shadow-lg backdrop-blur transition hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div
+              className="relative overflow-hidden rounded-2xl border border-white/10 bg-black"
+              onTouchStart={event => {
+                touchStartX.current = event.touches[0]?.clientX ?? null;
+              }}
+              onTouchEnd={event => {
+                if (touchStartX.current == null) return;
+                const deltaX = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+                touchStartX.current = null;
+                if (Math.abs(deltaX) < 50) return;
+                if (deltaX < 0) {
+                  setActiveImageIndex(prev => (prev + 1) % unit.images.length);
+                } else {
+                  setActiveImageIndex(prev => (prev - 1 + unit.images.length) % unit.images.length);
+                }
+              }}
+            >
+              <img
+                src={unit.images[activeImageIndex]}
+                alt={`${unit.title} photo ${activeImageIndex + 1}`}
+                className="h-[72vh] w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+
+              {unit.images.length > 1 && (
+                <>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      prevImage();
+                    }}
+                    aria-label="Previous full gallery image"
+                    className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </button>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      nextImage();
+                    }}
+                    aria-label="Next full gallery image"
+                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </button>
+                </>
+              )}
+
+              <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
+                {unit.images.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setActiveImageIndex(idx);
+                    }}
+                    className={`h-2.5 rounded-full transition-all ${
+                      idx === activeImageIndex ? 'w-7 bg-amber-400' : 'w-2.5 bg-white/75'
+                    }`}
+                    aria-label={`View image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

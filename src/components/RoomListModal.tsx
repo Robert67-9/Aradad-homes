@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Unit, Room, Currency } from '../lib/types';
 import { formatCurrency, getRoomMonthlyRate, getRoomWeeklyRate } from '../lib/utils';
 import {
@@ -36,6 +36,46 @@ export const RoomListModal: React.FC<RoomListModalProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'rooms' | 'amenities' | 'policies'>('overview');
   const [selectedPhoto, setSelectedPhoto] = useState<string>(unit?.images[0] || '');
   const [selectedRoomPhotos, setSelectedRoomPhotos] = useState<Record<string, string>>({});
+  const [isFullscreenGalleryOpen, setIsFullscreenGalleryOpen] = useState(false);
+  const [fullscreenGalleryIndex, setFullscreenGalleryIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+
+  const cycleUnitPhoto = (direction: 1 | -1) => {
+    if (!unit || unit.images.length <= 1) return;
+    const currentIndex = unit.images.indexOf(selectedPhoto);
+    const nextIndex = currentIndex >= 0
+      ? (currentIndex + direction + unit.images.length) % unit.images.length
+      : 0;
+    setSelectedPhoto(unit.images[nextIndex]);
+  };
+
+  const openGallery = () => {
+    if (!unit || unit.images.length === 0) return;
+    const index = unit.images.indexOf(selectedPhoto);
+    setFullscreenGalleryIndex(index >= 0 ? index : 0);
+    setIsFullscreenGalleryOpen(true);
+  };
+
+  const moveGallery = (direction: 1 | -1) => {
+    if (!unit || unit.images.length <= 1) return;
+    setFullscreenGalleryIndex(prev => (prev + direction + unit.images.length) % unit.images.length);
+  };
+
+  const handlePhotosTouchStart = (event: React.TouchEvent) => {
+    touchStartX.current = event.touches[0]?.clientX ?? null;
+  };
+
+  const handlePhotosTouchEnd = (event: React.TouchEvent) => {
+    if (touchStartX.current == null) return;
+    const deltaX = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(deltaX) < 40) return;
+    if (deltaX < 0) {
+      cycleUnitPhoto(1);
+    } else {
+      cycleUnitPhoto(-1);
+    }
+  };
 
   useEffect(() => {
     if (unit) {
@@ -116,7 +156,12 @@ export const RoomListModal: React.FC<RoomListModalProps> = ({
             <div className="space-y-6">
               {/* Photo Showcase */}
               <div className="space-y-3">
-                <div className="aspect-[16/9] w-full rounded-xl overflow-hidden bg-stone-100 border border-stone-200">
+                <div
+                  className="aspect-[16/9] w-full rounded-xl overflow-hidden bg-stone-100 border border-stone-200 cursor-pointer"
+                  onClick={openGallery}
+                  onTouchStart={handlePhotosTouchStart}
+                  onTouchEnd={handlePhotosTouchEnd}
+                >
                   <img
                     src={selectedPhoto}
                     alt="Apartment Interior"
@@ -370,6 +415,89 @@ export const RoomListModal: React.FC<RoomListModalProps> = ({
           </div>
         </div>
       </div>
+
+      {isFullscreenGalleryOpen && unit && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 p-3 sm:p-8"
+          onClick={() => setIsFullscreenGalleryOpen(false)}
+        >
+          <div className="relative w-full max-w-5xl" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setIsFullscreenGalleryOpen(false)}
+              aria-label="Close photo gallery"
+              className="absolute -top-2 right-0 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white shadow-lg backdrop-blur-sm transition hover:bg-white/20"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div
+              className="relative overflow-hidden rounded-2xl border border-white/10 bg-black"
+              onTouchStart={event => {
+                touchStartX.current = event.touches[0]?.clientX ?? null;
+              }}
+              onTouchEnd={event => {
+                if (touchStartX.current == null) return;
+                const deltaX = (event.changedTouches[0]?.clientX ?? touchStartX.current) - touchStartX.current;
+                touchStartX.current = null;
+                if (Math.abs(deltaX) < 50) return;
+                if (deltaX < 0) {
+                  moveGallery(1);
+                } else {
+                  moveGallery(-1);
+                }
+              }}
+            >
+              <img
+                src={unit.images[fullscreenGalleryIndex]}
+                alt={`${unit.title} full view ${fullscreenGalleryIndex + 1}`}
+                className="h-[72vh] w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+
+              {unit.images.length > 1 && (
+                <>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      moveGallery(-1);
+                    }}
+                    aria-label="Previous photo"
+                    className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
+                  >
+                    <ChevronRight className="h-6 w-6 rotate-180" />
+                  </button>
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      moveGallery(1);
+                    }}
+                    aria-label="Next photo"
+                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </button>
+                </>
+              )}
+
+              <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
+                {unit.images.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={e => {
+                      e.stopPropagation();
+                      setFullscreenGalleryIndex(idx);
+                    }}
+                    className={`h-2.5 rounded-full transition-all ${
+                      idx === fullscreenGalleryIndex ? 'w-7 bg-amber-400' : 'w-2.5 bg-white/75'
+                    }`}
+                    aria-label={`Open photo ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
