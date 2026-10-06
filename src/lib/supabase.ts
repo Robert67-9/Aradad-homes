@@ -2,6 +2,7 @@
 import { AdminSignupRequest, Booking, Unit, Room, BlockedDate, SupabaseConfig, SiteSettings } from './types';
 import { APARTMENT_DATA, INITIAL_UNITS, DEFAULT_SITE_SETTINGS } from './mockData';
 import { resolveImageUrls } from './imageAssets';
+import { readStorageValue, removeStorageValue, writeStorageValue } from './cookies';
 
 const STORAGE_KEYS = {
   SUPABASE_URL: 'aradad_supabase_url',
@@ -9,6 +10,45 @@ const STORAGE_KEYS = {
   UNITS: 'aradad_local_units',
   SETTINGS: 'aradad_site_settings',
 };
+
+function compactImageList(images?: string[]): string[] {
+  if (!Array.isArray(images)) return [];
+  return images.slice(0, 3);
+}
+
+function compactUnitForStorage(unit: Unit): Unit {
+  return {
+    ...unit,
+    images: compactImageList(unit.images),
+    rooms: Array.isArray(unit.rooms)
+      ? unit.rooms.map(room => ({
+          ...room,
+          images: compactImageList(room.images),
+        }))
+      : [],
+  };
+}
+
+function safeSetStorageItem(key: string, value: unknown): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.warn(`Storage quota exceeded for ${key}; clearing cached data.`, error);
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore cleanup errors; browser storage is no longer usable for this origin.
+    }
+    try {
+      writeStorageValue(key, JSON.stringify(value));
+    } catch {
+      // ignore cookie write errors
+    }
+    return false;
+  }
+}
 
 // Only allow production HTTPS URLs (plain HTTP is limited to local development).
 export function isValidSupabaseUrl(url: unknown): boolean {
@@ -45,8 +85,8 @@ export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
 
-  const localUrl = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) || '' : '';
-  const localKey = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SUPABASE_ANON_KEY) || '' : '';
+  const localUrl = typeof window !== 'undefined' ? readStorageValue(STORAGE_KEYS.SUPABASE_URL) || '' : '';
+  const localKey = typeof window !== 'undefined' ? readStorageValue(STORAGE_KEYS.SUPABASE_ANON_KEY) || '' : '';
 
   // A deployment's reviewed endpoint cannot be replaced by browser-local settings.
   let candidateUrl = (envUrl || localUrl || '').trim();
@@ -57,14 +97,14 @@ export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
     candidateUrl = '';
     // Clean invalid cached entry if present
     if (typeof window !== 'undefined' && localUrl && !isValidSupabaseUrl(localUrl)) {
-      localStorage.removeItem(STORAGE_KEYS.SUPABASE_URL);
+      removeStorageValue(STORAGE_KEYS.SUPABASE_URL);
     }
   }
 
   if (!isPublicSupabaseKey(candidateKey)) {
     candidateKey = '';
     if (typeof window !== 'undefined' && localKey) {
-      localStorage.removeItem(STORAGE_KEYS.SUPABASE_ANON_KEY);
+      removeStorageValue(STORAGE_KEYS.SUPABASE_ANON_KEY);
     }
   }
 
@@ -80,8 +120,8 @@ export function saveStoredSupabaseConfig(url: string, anonKey: string) {
   const trimmedKey = (anonKey || '').trim();
   if (!isValidSupabaseUrl(trimmedUrl) || !isPublicSupabaseKey(trimmedKey)) return false;
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEYS.SUPABASE_URL, trimmedUrl);
-    localStorage.setItem(STORAGE_KEYS.SUPABASE_ANON_KEY, trimmedKey);
+    writeStorageValue(STORAGE_KEYS.SUPABASE_URL, trimmedUrl);
+    writeStorageValue(STORAGE_KEYS.SUPABASE_ANON_KEY, trimmedKey);
   }
   return true;
 }
@@ -216,9 +256,9 @@ export async function fetchUnits(includeInactive = false): Promise<Unit[]> {
 // Local Storage for units / rooms
 export function getLocalUnits(): Unit[] {
   if (typeof window === 'undefined') return INITIAL_UNITS;
-  const stored = localStorage.getItem(STORAGE_KEYS.UNITS);
+  const stored = readStorageValue(STORAGE_KEYS.UNITS);
   if (!stored) {
-    localStorage.setItem(STORAGE_KEYS.UNITS, JSON.stringify(INITIAL_UNITS));
+    writeStorageValue(STORAGE_KEYS.UNITS, JSON.stringify(INITIAL_UNITS));
     return INITIAL_UNITS;
   }
   try {
@@ -237,9 +277,9 @@ export function getLocalUnits(): Unit[] {
 }
 
 export function saveLocalUnits(units: Unit[]) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEYS.UNITS, JSON.stringify(units));
-  }
+  if (typeof window === 'undefined') return;
+  const compactUnits = units.map(compactUnitForStorage);
+  safeSetStorageItem(STORAGE_KEYS.UNITS, compactUnits);
 }
 
 function mapRoomRecord(item: any): Room {
@@ -492,9 +532,9 @@ function normalizeSiteSettings(value: unknown): SiteSettings {
 
 export function getSiteSettings(): SiteSettings {
   if (typeof window === 'undefined') return DEFAULT_SITE_SETTINGS;
-  const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+  const stored = readStorageValue(STORAGE_KEYS.SETTINGS);
   if (!stored) {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SITE_SETTINGS));
+    safeSetStorageItem(STORAGE_KEYS.SETTINGS, DEFAULT_SITE_SETTINGS);
     return DEFAULT_SITE_SETTINGS;
   }
   try {
@@ -517,7 +557,9 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
     if (!data?.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) return getSiteSettings();
 
     const merged = normalizeSiteSettings(data.settings);
-    if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+    if (typeof window !== 'undefined') {
+      safeSetStorageItem(STORAGE_KEYS.SETTINGS, merged);
+    }
     return merged;
   } catch (error) {
     console.warn('Could not load shared site settings:', error);
@@ -539,7 +581,7 @@ export async function saveSiteSettings(newSettings: Partial<SiteSettings>): Prom
   if (error) throw new Error(error.message || 'Site settings could not be saved.');
 
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+    safeSetStorageItem(STORAGE_KEYS.SETTINGS, updated);
   }
   return updated;
 }
@@ -638,11 +680,15 @@ export async function createBooking(booking: GuestBookingInput): Promise<{ succe
     });
     if (error || !data) {
       console.error('Secure reservation RPC failed:', error);
-      if (error?.code === '23P01') {
-        return { success: false, error: 'Those dates are no longer available. Please choose another date range. No payment was taken.' };
+      const rawMessage = typeof error?.message === 'string' ? error.message : '';
+      const detailMessage = typeof error?.details === 'string' ? error.details : '';
+      const combined = `${rawMessage} ${detailMessage}`.toLowerCase();
+
+      if (error?.code === '23P01' || combined.includes('those dates are no longer available') || combined.includes('requested stay is invalid')) {
+        return { success: false, error: 'Those dates are no longer available for this room. Please choose a different date range. No payment was taken.' };
       }
-      if (error?.code === '22023') {
-        return { success: false, error: 'The room or reservation details are invalid. Please review the dates and guest count. No payment was taken.' };
+      if (error?.code === '22023' || combined.includes('select an individual room') || combined.includes('selected room is unavailable') || combined.includes('booking details are invalid')) {
+        return { success: false, error: 'The room or reservation details are invalid. Please review your dates, guest count, and selected room. No payment was taken.' };
       }
       if (error?.code === 'PGRST202' || error?.code === 'PGRST205' || error?.code === '42P01') {
         return { success: false, error: 'The secure reservation service needs to be set up. No booking or payment was created.' };
@@ -689,7 +735,7 @@ export async function sendBookingConfirmationEmail(booking: Pick<Booking, 'id' |
     const { data, error } = await client.functions.invoke('booking-confirmation', {
       body: { bookingId: booking.id, bookingCode: booking.bookingCode, guestEmail: booking.guestEmail },
     });
-    if (error || !data?.success) {
+    if (error || data?.sent !== true) {
       console.warn('Booking confirmation email was not sent:', data?.error || error?.message);
       return false;
     }
