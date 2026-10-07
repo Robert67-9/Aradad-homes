@@ -462,7 +462,7 @@ export const RoomListModal: React.FC<RoomListModalProps> = ({
                       moveGallery(-1);
                     }}
                     aria-label="Previous photo"
-                    className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
+                    className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
                   >
                     <ChevronRight className="h-6 w-6 rotate-180" />
                   </button>
@@ -472,7 +472,7 @@ export const RoomListModal: React.FC<RoomListModalProps> = ({
                       moveGallery(1);
                     }}
                     aria-label="Next photo"
-                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/60"
+                    className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white shadow-lg backdrop-blur-sm transition hover:bg-black/70"
                   >
                     <ChevronRight className="h-6 w-6" />
                   </button>
