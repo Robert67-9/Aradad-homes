@@ -4,10 +4,10 @@ import { fetchUnits, fetchBookings, fetchBlockedDates, fetchSiteSettings, getSit
 import { INITIAL_UNITS } from './lib/mockData';
 import { AuthUser, getCurrentUser, logout } from './lib/auth';
 import { formatCurrency, getRoomMonthlyRate, getRoomWeeklyRate } from './lib/utils';
-import { setVisibleTestCookie } from './lib/cookies';
+import { setCookie } from './lib/cookies';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
-import { Users, Wifi, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Users, Wifi, Zap } from 'lucide-react';
 
 const BookingModal = lazy(() => import('./components/BookingModal').then(module => ({ default: module.BookingModal })));
 const MyBookingModal = lazy(() => import('./components/MyBookingModal').then(module => ({ default: module.MyBookingModal })));
@@ -40,6 +40,10 @@ export default function App() {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
   const [isMyBookingOpen, setIsMyBookingOpen] = useState(false);
+  const [showCookieBanner, setShowCookieBanner] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return !localStorage.getItem('aradad_cookie_consent');
+  });
   const [paystackReturn, setPaystackReturn] = useState<{
     status: 'checking' | 'verified' | 'error';
     reference: string;
@@ -121,10 +125,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    setVisibleTestCookie();
-  }, []);
-
-  useEffect(() => {
     let isMounted = true;
     getCurrentUser().then(user => {
       if (isMounted) setCurrentUser(user);
@@ -182,10 +182,47 @@ export default function App() {
     }
   };
 
+  const handleCookieChoice = (choice: 'accept' | 'decline' | 'configure') => {
+    const value = choice === 'accept' ? 'accepted' : choice === 'decline' ? 'declined' : 'configured';
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('aradad_cookie_consent', value);
+    }
+    setCookie('aradad_cookie_consent', value, 365);
+    setShowCookieBanner(false);
+  };
+
   // Extract all individual rooms across apartments
   const allRooms = units.flatMap(u =>
     (u.rooms || []).filter(room => room.isActive !== false).map(r => ({ ...r, parentUnit: u }))
   );
+
+  useEffect(() => {
+    if (allRooms.every(room => room.images.length <= 1)) return;
+    const timer = window.setInterval(() => {
+      setSelectedRoomPhotos(current => {
+        const next = { ...current };
+        allRooms.forEach(room => {
+          if (room.images.length <= 1) return;
+          const currentImage = next[room.id] || room.images[0];
+          const currentIndex = room.images.indexOf(currentImage);
+          next[room.id] = room.images[(currentIndex + 1) % room.images.length];
+        });
+        return next;
+      });
+    }, 3500);
+
+    return () => window.clearInterval(timer);
+  }, [units]);
+
+  const moveRoomPhoto = (room: Room, direction: -1 | 1) => {
+    if (room.images.length <= 1) return;
+    setSelectedRoomPhotos(current => {
+      const currentImage = current[room.id] || room.images[0];
+      const currentIndex = room.images.indexOf(currentImage);
+      const nextIndex = (Math.max(currentIndex, 0) + direction + room.images.length) % room.images.length;
+      return { ...current, [room.id]: room.images[nextIndex] };
+    });
+  };
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans">
@@ -223,6 +260,58 @@ export default function App() {
         onOpenAdminPortal={handleOpenAdminPortal}
         onLogout={handleLogout}
       />
+
+      {showCookieBanner && (
+        <div className="fixed inset-x-0 bottom-0 z-[120] bg-[#2d3a45]/95 backdrop-blur-md border-t border-white/10 px-4 pb-4 pt-3 shadow-2xl">
+          <div className="mx-auto max-w-5xl rounded-[18px] bg-[#2b2f38]/90 p-4 text-stone-100 shadow-2xl ring-1 ring-white/10 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">How we use cookies</h3>
+              <button
+                type="button"
+                onClick={() => handleCookieChoice('decline')}
+                aria-label="Close cookie banner"
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-stone-200 hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-base sm:text-xl leading-relaxed text-stone-200">
+              When you visit our website, we use strictly necessary cookies to ensure the website functions properly and securely. With your consent, we and our partners also use performance, analytics, and marketing cookies to measure website usage, improve our services, and deliver relevant advertising.
+            </p>
+
+            <p className="mt-4 text-base sm:text-lg leading-relaxed text-stone-200">
+              You can find a full list of the cookies we use and learn more about how and why we process your personal data in our <span className="font-semibold text-amber-300 underline decoration-amber-300/80 underline-offset-4">Cookie Policy</span>. You may withdraw your consent at any time via the <span className="font-semibold text-amber-300 underline decoration-amber-300/80 underline-offset-4">Cookie Settings</span>.
+            </p>
+
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => handleCookieChoice('accept')}
+                className="w-full rounded-xl bg-[#f46b8d] px-4 py-4 text-xl font-black text-white shadow-lg shadow-pink-500/20 transition hover:brightness-110"
+              >
+                Accept all
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCookieChoice('configure')}
+                className="w-full rounded-xl bg-white/10 px-4 py-4 text-xl font-black text-white transition hover:bg-white/15"
+              >
+                Configure
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCookieChoice('decline')}
+                className="w-full rounded-xl bg-white/10 px-4 py-4 text-xl font-black text-white transition hover:bg-white/15"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1">
         {/* Hero Banner with Search & Availability Widget */}
@@ -280,6 +369,23 @@ export default function App() {
                       referrerPolicy="no-referrer"
                     />
                     {room.images.length > 1 && (
+                      <>
+                      <button
+                        type="button"
+                        onClick={() => moveRoomPhoto(room, -1)}
+                        aria-label={`Previous photo of ${room.name}`}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/65 text-white shadow-lg transition hover:bg-black/80"
+                      >
+                        <ChevronLeft className="h-6 w-6" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveRoomPhoto(room, 1)}
+                        aria-label={`Next photo of ${room.name}`}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-black/65 text-white shadow-lg transition hover:bg-black/80"
+                      >
+                        <ChevronRight className="h-6 w-6" />
+                      </button>
                       <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/45 backdrop-blur-sm">
                         {room.images.map((image, index) => (
                           <button
@@ -292,6 +398,7 @@ export default function App() {
                           />
                         ))}
                       </div>
+                      </>
                     )}
                     <div className="absolute top-2.5 left-2.5 bg-stone-900/80 backdrop-blur-xs text-white text-[11px] font-semibold px-2 py-0.5 rounded">
                       Private room · Adjiringanor
