@@ -398,7 +398,7 @@ BEGIN
     RAISE EXCEPTION 'Those dates are no longer available.' USING ERRCODE = '23P01';
   END IF;
 
-  v_code := 'ARD-' || upper(replace(gen_random_uuid()::TEXT, '-', ''));
+  v_code := 'ARD-' || upper(substr(replace(gen_random_uuid()::TEXT, '-', ''), 1, 6));
   INSERT INTO public.bookings (
     booking_code, unit_id, room_id, unit_name, guest_name, guest_email, guest_phone, guest_count,
     check_in_date, check_out_date, check_in_time, check_out_time, nights, nightly_rate, subtotal_amount, security_deposit,
@@ -439,9 +439,21 @@ AS $$
     b.currency, b.payment_preference, b.payment_gateway, b.payment_status,
     b.booking_status, b.special_requests, b.created_at
   FROM public.bookings b
-  WHERE b.booking_code = upper(btrim(COALESCE(p_booking_code,'')))
-    AND b.guest_email = lower(btrim(COALESCE(p_email,''))) LIMIT 1;
+  WHERE lower(btrim(COALESCE(p_email,''))) <> ''
+    AND b.guest_email = lower(btrim(COALESCE(p_email,'')))
+    AND (
+      btrim(COALESCE(p_booking_code,'')) = ''
+      OR b.booking_code = upper(btrim(COALESCE(p_booking_code,'')))
+    )
+  ORDER BY b.created_at DESC
+  LIMIT 20;
 $$;
+
+-- Shorten existing long booking references to the new 6-character format.
+UPDATE public.bookings
+SET booking_code = 'ARD-' || upper(substr(replace(gen_random_uuid()::TEXT, '-', ''), 1, 6))
+WHERE booking_code !~ '^ARD-[A-F0-9]{6}$';
+
 CREATE OR REPLACE FUNCTION public.request_booking_cancellation(p_booking_code TEXT, p_email TEXT)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
@@ -455,6 +467,7 @@ BEGIN
   RETURN v_id IS NOT NULL;
 END;
 $$;
+
 REVOKE ALL ON FUNCTION public.create_guest_booking(TEXT,TEXT,TEXT,TEXT,TEXT,INTEGER,DATE,DATE,TEXT,TEXT,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.lookup_booking(TEXT,TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.request_booking_cancellation(TEXT,TEXT) FROM PUBLIC;

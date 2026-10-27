@@ -26,7 +26,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [foundBooking, setFoundBooking] = useState<Booking | null>(null);
+  const [foundBookings, setFoundBookings] = useState<Booking[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
 
@@ -45,23 +45,25 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
 
   if (!isOpen) return null;
 
+  const activeBooking = foundBookings.length === 1 ? foundBookings[0] : null;
+
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bookingCode.trim() || !email.trim()) {
-      setErrorMessage('Please provide both your Booking Code and Email.');
+    if (!email.trim()) {
+      setErrorMessage('Please provide the email you used for the reservation. The Booking Code is optional.');
       return;
     }
 
     setLoading(true);
     setErrorMessage('');
     try {
-      const result = await lookupBooking(bookingCode, email);
+      const results = await lookupBooking(bookingCode, email);
       setSearched(true);
-      if (result) {
-        setFoundBooking(result);
+      if (results.length > 0) {
+        setFoundBookings(results);
       } else {
-        setFoundBooking(null);
-        setErrorMessage('No reservation found matching this reference code and email. Please check and try again.');
+        setFoundBookings([]);
+        setErrorMessage('No reservation found for this email' + (bookingCode.trim() ? ' and booking code' : '') + '. Please check and try again.');
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Error looking up reservation.');
@@ -71,18 +73,18 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
   };
 
   const handleCancelReservation = async () => {
-    if (!foundBooking) return;
+    if (!foundBookings.length || !activeBooking) return;
     const confirmCancel = window.confirm(
       `Are you sure you want to cancel? Per ${siteSettings.siteName} policy, tenant cancellations are eligible for up to 70% refund on unstayed nights (30% retained for operations & calendar blockages). The $${siteSettings.defaultSecurityDeposit} security deposit is returned within 1-3 business days after inspection.`
     );
     if (!confirmCancel) return;
 
-    const cancelled = await requestBookingCancellation(foundBooking.bookingCode, foundBooking.guestEmail);
+    const cancelled = await requestBookingCancellation(activeBooking.bookingCode, activeBooking.guestEmail);
     if (!cancelled) {
       alert('We could not record the cancellation. Please contact the host for help.');
       return;
     }
-    setFoundBooking({ ...foundBooking, bookingStatus: 'cancelled' });
+    setFoundBookings(prev => prev.map(b => b.bookingCode === activeBooking.bookingCode ? { ...b, bookingStatus: 'cancelled' } : b));
     setShowCancelPrompt(false);
     alert('Your cancellation request has been recorded. Our team will process the eligible refund.');
   };
@@ -143,20 +145,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1">
-                  Booking Code
-                </label>
-                <input
-                  type="text"
-                  placeholder="ARD- followed by your 32-character reference"
-                  value={bookingCode}
-                  onChange={e => setBookingCode(e.target.value)}
-                  className="w-full bg-white border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 font-mono uppercase"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1">
-                  Guest Email
+                  Guest Email <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
@@ -167,7 +156,20 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
                   required
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1">
+                  Booking Code <span className="text-stone-400 normal-case">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. ARD-4F2A9C"
+                  value={bookingCode}
+                  onChange={e => setBookingCode(e.target.value)}
+                  className="w-full bg-white border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 font-mono uppercase"
+                />
+              </div>
             </div>
+            <p className="text-[11px] text-stone-500">Enter just your email to see all your reservations, or add the booking code to find one specific reservation.</p>
 
             <button
               type="submit"
@@ -185,61 +187,93 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
             )}
           </form>
 
+          {/* Results */}
+          {foundBookings.length > 1 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-stone-700">{foundBookings.length} reservations found for this email — select one:</p>
+              {foundBookings.map(b => (
+                <button
+                  key={b.bookingCode}
+                  type="button"
+                  onClick={() => setFoundBookings([b])}
+                  className="w-full flex items-center justify-between gap-3 border border-stone-200 rounded-xl p-3 bg-white hover:border-amber-400 transition-colors text-left"
+                >
+                  <div>
+                    <span className="text-xs font-mono text-stone-500 block">{b.bookingCode}</span>
+                    <strong className="text-sm text-stone-900">{b.unitName}</strong>
+                    <span className="block text-[11px] text-stone-500">{formatDatePretty(b.checkInDate)} → {formatDatePretty(b.checkOutDate)}</span>
+                  </div>
+                  <span
+                    className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded font-bold whitespace-nowrap ${
+                      b.bookingStatus === 'confirmed'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : b.bookingStatus === 'cancelled'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {b.bookingStatus}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Result Card */}
-          {foundBooking && (
+          {activeBooking && (
             <div className="space-y-4 border border-stone-200 rounded-xl p-5 bg-white shadow-xs">
               <div className="flex justify-between items-start border-b border-stone-100 pb-3">
                 <div>
                   <span className="text-xs uppercase font-mono text-stone-400 block">
-                    Code: {foundBooking.bookingCode}
+                    Code: {activeBooking.bookingCode}
                   </span>
                   <h4 className="font-serif text-lg font-bold text-stone-900">
-                    {foundBooking.unitName}
+                    {activeBooking.unitName}
                   </h4>
                 </div>
                 <span
                   className={`text-xs uppercase font-mono px-2 py-0.5 rounded font-bold ${
-                    foundBooking.bookingStatus === 'confirmed'
+                    activeBooking.bookingStatus === 'confirmed'
                       ? 'bg-emerald-100 text-emerald-800'
-                      : foundBooking.bookingStatus === 'cancelled'
+                      : activeBooking.bookingStatus === 'cancelled'
                       ? 'bg-red-100 text-red-800'
                       : 'bg-amber-100 text-amber-800'
                   }`}
                 >
-                  {foundBooking.bookingStatus}
+                  {activeBooking.bookingStatus}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs text-stone-700">
                 <div>
                   <span className="text-stone-400 block">Guest Name</span>
-                  <strong className="text-stone-900">{foundBooking.guestName}</strong>
+                  <strong className="text-stone-900">{activeBooking.guestName}</strong>
                 </div>
                 <div>
                   <span className="text-stone-400 block">Guests</span>
-                  <strong className="text-stone-900">{foundBooking.guestCount} Guests</strong>
+                  <strong className="text-stone-900">{activeBooking.guestCount} Guests</strong>
                 </div>
                 <div>
                   <span className="text-stone-400 block">Check-In</span>
-                  <strong className="text-stone-900">{formatDatePretty(foundBooking.checkInDate)} ({foundBooking.checkInTime})</strong>
+                  <strong className="text-stone-900">{formatDatePretty(activeBooking.checkInDate)} ({activeBooking.checkInTime})</strong>
                 </div>
                 <div>
                   <span className="text-stone-400 block">Check-Out</span>
-                  <strong className="text-stone-900">{formatDatePretty(foundBooking.checkOutDate)} ({foundBooking.checkOutTime})</strong>
+                  <strong className="text-stone-900">{formatDatePretty(activeBooking.checkOutDate)} ({activeBooking.checkOutTime})</strong>
                 </div>
                 <div>
                   <span className="text-stone-400 block">Total Nights</span>
-                  <strong className="text-stone-900">{foundBooking.nights} Nights</strong>
+                  <strong className="text-stone-900">{activeBooking.nights} Nights</strong>
                 </div>
                 <div>
                   <span className="text-stone-400 block">Total Amount</span>
                   <strong className="text-stone-900 font-mono">
-                    {formatStoredMoney(foundBooking.totalAmount, foundBooking.currency)}
+                    {formatStoredMoney(activeBooking.totalAmount, activeBooking.currency)}
                   </strong>
                 </div>
                 <div>
                   <span className="text-stone-400 block">Payment</span>
-                  <strong className="text-stone-900 font-mono">{getPaymentSummary(foundBooking)}</strong>
+                  <strong className="text-stone-900 font-mono">{getPaymentSummary(activeBooking)}</strong>
                 </div>
               </div>
 
@@ -261,7 +295,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
               {/* Action buttons */}
               <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-stone-100">
                 <a
-                  href={`https://wa.me/${siteSettings.ownerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${siteSettings.ownerName}, I have an inquiry regarding booking ${foundBooking.bookingCode}`)}`}
+                  href={`https://wa.me/${siteSettings.ownerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${siteSettings.ownerName}, I have an inquiry regarding booking ${activeBooking.bookingCode}`)}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
@@ -270,7 +304,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
                   WhatsApp Host ({siteSettings.ownerName})
                 </a>
 
-                {foundBooking.bookingStatus !== 'cancelled' && (
+                {activeBooking.bookingStatus !== 'cancelled' && (
                   <button
                     type="button"
                     onClick={handleCancelReservation}

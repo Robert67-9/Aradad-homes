@@ -738,21 +738,21 @@ export async function removeBlockedDate(id: string): Promise<boolean> {
   return !error && Boolean(data);
 }
 
-export async function lookupBooking(bookingCode?: string, email?: string): Promise<Booking | null> {
+export async function lookupBooking(bookingCode?: string, email?: string): Promise<Booking[]> {
   const cleanCode = String(bookingCode || '').trim().toUpperCase();
   const cleanEmail = String(email || '').trim().toLowerCase();
-  if (!cleanCode || !cleanEmail) return null;
+  if (!cleanEmail) return [];
   const client = getSupabaseClient();
-  if (!client) return null;
+  if (!client) return [];
   try {
     const { data, error } = await client.rpc('lookup_booking', {
       p_booking_code: cleanCode,
       p_email: cleanEmail,
     });
-    if (error || !Array.isArray(data) || data.length !== 1) return null;
-    return mapBookingRecord(data[0]);
+    if (error || !Array.isArray(data) || data.length === 0) return [];
+    return data.map(mapBookingRecord);
   } catch {
-    return null;
+    return [];
   }
 }
 
