@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AdminSignupRequest, Booking, BlockedDate, Unit, Room, Currency, SiteSettings } from '../lib/types';
 import {
   convertCurrencyAmount,
@@ -24,9 +24,8 @@ import {
   saveSiteSettings,
   fetchAdminSignupRequests,
   reviewAdminSignupRequest,
-  verifyPaystackCheckout,
 } from '../lib/supabase';
-import { AuthUser, createStaffAccount, fetchStaffAccounts, toggleStaffAccountStatus } from '../lib/auth';
+import { AuthUser } from '../lib/auth';
 import { BEDROOM_SUITE_IMAGE, LIVING_ROOM_IMAGE, MODERN_KITCHEN_IMAGE } from '../lib/imageAssets';
 import { AradadLogo } from './AradadLogo';
 import {
@@ -43,7 +42,6 @@ import {
   Clock,
   DollarSign,
   Building,
-  KeyRound,
   LogOut,
   ExternalLink,
   Bed,
@@ -62,7 +60,15 @@ import {
   Sparkles,
   Upload,
   Star,
+  RefreshCw,
 } from 'lucide-react';
+import {
+  createStaffAccount,
+  fetchStaffAccounts,
+  toggleStaffAccountStatus,
+  updateManagementPassword,
+  updateStaffProfile,
+} from '../lib/auth';
 
 interface HostDashboardModalProps {
   currentUser: AuthUser;
@@ -73,9 +79,10 @@ interface HostDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogout: () => void;
-  onRefreshData: () => Promise<void> | void;
+  onRefreshData: () => void;
   siteSettings?: SiteSettings;
   onUpdateSiteSettings?: (newSettings: SiteSettings) => void;
+  onCurrentUserUpdated?: (user: AuthUser) => void;
 }
 
 const DEFAULT_ROOM_IMAGE = BEDROOM_SUITE_IMAGE;
@@ -136,9 +143,10 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   onRefreshData,
   siteSettings,
   onUpdateSiteSettings,
+  onCurrentUserUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'bookings' | 'calendar' | 'units' | 'rooms' | 'settings' | 'payouts' | 'supabase' | 'staff'
+    'overview' | 'bookings' | 'calendar' | 'units' | 'rooms' | 'settings' | 'payouts' | 'staff'
   >('overview');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -220,33 +228,69 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   const [signupRequestsError, setSignupRequestsError] = useState('');
   const [reviewingSignupRequest, setReviewingSignupRequest] = useState<string | null>(null);
   const [signupRoleById, setSignupRoleById] = useState<Record<string, 'admin' | 'manager' | 'staff'>>({});
-  const [newStaffForm, setNewStaffForm] = useState({ fullName: '', email: '', password: '', role: 'staff' as AuthUser['role'] });
-  const [isCreatingStaff, setIsCreatingStaff] = useState(false);
-  const [staffCreateMessage, setStaffCreateMessage] = useState<{ success: boolean; text: string } | null>(null);
   const [staffAccounts, setStaffAccounts] = useState<AuthUser[]>([]);
   const [staffAccountsLoading, setStaffAccountsLoading] = useState(false);
   const [staffAccountsError, setStaffAccountsError] = useState('');
-  const [actioningStaffAccountId, setActioningStaffAccountId] = useState<string | null>(null);
+  const [staffProfileDrafts, setStaffProfileDrafts] = useState<Record<string, {
+    fullName: string;
+    phone: string;
+    title: string;
+    role: AuthUser['role'];
+  }>>({});
+  const [savingStaffProfileId, setSavingStaffProfileId] = useState<string | null>(null);
+  const [changingStaffStatusId, setChangingStaffStatusId] = useState<string | null>(null);
+  const [newStaff, setNewStaff] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    role: 'staff' as AuthUser['role'],
+  });
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [newStaffResult, setNewStaffResult] = useState('');
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', password: '', confirmPassword: '' });
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordResult, setPasswordResult] = useState('');
+
+  const loadSignupRequests = useCallback(async () => {
+    if (currentUser.role !== 'admin') return;
+    setSignupRequestsLoading(true);
+    setSignupRequestsError('');
+    try {
+      setSignupRequests(await fetchAdminSignupRequests());
+    } catch (error) {
+      setSignupRequests([]);
+      setSignupRequestsError(error instanceof Error ? error.message : 'Could not load staff access requests.');
+    } finally {
+      setSignupRequestsLoading(false);
+    }
+  }, [currentUser.role]);
+
+  const loadStaffAccounts = useCallback(async () => {
+    if (currentUser.role !== 'admin') return;
+    setStaffAccountsLoading(true);
+    setStaffAccountsError('');
+    try {
+      const accounts = await fetchStaffAccounts();
+      setStaffAccounts(accounts);
+      setStaffProfileDrafts(Object.fromEntries(accounts.map(account => [account.id, {
+        fullName: account.name,
+        phone: account.phone || '',
+        title: account.title || '',
+        role: account.role,
+      }])));
+    } catch (error) {
+      setStaffAccounts([]);
+      setStaffAccountsError(error instanceof Error ? error.message : 'Could not load management profiles.');
+    } finally {
+      setStaffAccountsLoading(false);
+    }
+  }, [currentUser.role]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'staff' || currentUser.role !== 'admin') return;
-    let isMounted = true;
-    setStaffAccountsLoading(true);
-    setStaffAccountsError('');
-    fetchStaffAccounts()
-      .then(accounts => { if (isMounted) setStaffAccounts(accounts); })
-      .catch(error => { if (isMounted) setStaffAccountsError(error instanceof Error ? error.message : 'Could not load management accounts.'); })
-      .finally(() => { if (isMounted) setStaffAccountsLoading(false); });
-    setSignupRequestsLoading(true);
-    setSignupRequestsError('');
-    fetchAdminSignupRequests()
-      .then(requests => { if (isMounted) setSignupRequests(requests); })
-      .catch(error => {
-        if (isMounted) setSignupRequestsError(error instanceof Error ? error.message : 'Could not load staff access requests.');
-      })
-      .finally(() => { if (isMounted) setSignupRequestsLoading(false); });
-    return () => { isMounted = false; };
-  }, [isOpen, activeTab, currentUser.role]);
+    void loadSignupRequests();
+    void loadStaffAccounts();
+  }, [isOpen, activeTab, currentUser.role, loadSignupRequests, loadStaffAccounts]);
 
   if (!isOpen) return null;
 
@@ -256,6 +300,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     try {
       await reviewAdminSignupRequest(request.id, approve, signupRoleById[request.id] || 'staff');
       setSignupRequests(requests => requests.filter(item => item.id !== request.id));
+      await loadStaffAccounts();
       onRefreshData();
     } catch (error) {
       setSignupRequestsError(error instanceof Error ? error.message : 'Could not review this request.');
@@ -264,37 +309,87 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     }
   };
 
-  const handleCreateStaff = async (event: React.FormEvent) => {
+  const handleCreateStaffAccount = async (event: React.FormEvent) => {
     event.preventDefault();
-    setIsCreatingStaff(true);
-    setStaffCreateMessage(null);
-    const result = await createStaffAccount(newStaffForm);
-    if (result.success) {
-      setNewStaffForm({ fullName: '', email: '', password: '', role: 'staff' });
-      setStaffCreateMessage({ success: true, text: 'Management account created. Share the temporary password securely with the team member.' });
-      onRefreshData();
-    } else {
-      setStaffCreateMessage({ success: false, text: result.error || 'Could not create the management account.' });
+    setCreatingStaff(true);
+    setNewStaffResult('');
+    try {
+      const result = await createStaffAccount(newStaff);
+      if (!result.success) {
+        setNewStaffResult(result.error || 'Could not create this management account.');
+        return;
+      }
+      setNewStaff({ fullName: '', email: '', password: '', role: 'staff' });
+      setNewStaffResult(`Management account created for ${result.email || 'the new user'}. Share its temporary password securely.`);
+      await loadStaffAccounts();
+    } catch (error) {
+      setNewStaffResult(error instanceof Error ? error.message : 'Could not create this management account.');
+    } finally {
+      setCreatingStaff(false);
     }
-    setIsCreatingStaff(false);
   };
 
-  const handleToggleStaffAccount = async (account: AuthUser) => {
-    setActioningStaffAccountId(account.id);
+  const handleSaveStaffProfile = async (account: AuthUser) => {
+    const draft = staffProfileDrafts[account.id];
+    if (!draft) return;
+    setSavingStaffProfileId(account.id);
     setStaffAccountsError('');
-    const nextActive = !account.isActive;
-    const result = await toggleStaffAccountStatus(account.id, nextActive);
-    if (result.success) {
-      setStaffAccounts(previous => previous.map(item => item.id === account.id ? { ...item, isActive: nextActive } : item));
-      setStaffCreateMessage({
-        success: true,
-        text: nextActive ? 'Management account reactivated.' : 'Management account deactivated. They can no longer access the portal.',
-      });
-      onRefreshData();
-    } else {
-      setStaffAccountsError(result.error || 'Could not update this management account.');
+    try {
+      const result = await updateStaffProfile({ userId: account.id, ...draft });
+      if (!result.success) {
+        setStaffAccountsError(result.error || 'Could not update this profile.');
+      } else {
+        if (account.id === currentUser.id) {
+          onCurrentUserUpdated?.({
+            ...currentUser,
+            name: draft.fullName.trim(),
+            phone: draft.phone.trim() || undefined,
+            title: draft.title.trim() || undefined,
+          });
+        }
+        await loadStaffAccounts();
+      }
+    } catch (error) {
+      setStaffAccountsError(error instanceof Error ? error.message : 'Could not update this profile.');
+    } finally {
+      setSavingStaffProfileId(null);
     }
-    setActioningStaffAccountId(null);
+  };
+
+  const handleToggleStaffStatus = async (account: AuthUser) => {
+    setChangingStaffStatusId(account.id);
+    setStaffAccountsError('');
+    try {
+      const result = await toggleStaffAccountStatus(account.id, !account.isActive);
+      if (!result.success) {
+        setStaffAccountsError(result.error || 'Could not update this account status.');
+      } else {
+        await loadStaffAccounts();
+      }
+    } catch (error) {
+      setStaffAccountsError(error instanceof Error ? error.message : 'Could not update this account status.');
+    } finally {
+      setChangingStaffStatusId(null);
+    }
+  };
+
+  const handleUpdateOwnPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordResult('');
+    if (passwordForm.password !== passwordForm.confirmPassword) {
+      setPasswordResult('The passwords do not match.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const result = await updateManagementPassword(passwordForm.currentPassword, passwordForm.password);
+      setPasswordResult(result.success ? 'Your password has been updated.' : result.error || 'Could not update your password.');
+      if (result.success) setPasswordForm({ currentPassword: '', password: '', confirmPassword: '' });
+    } catch (error) {
+      setPasswordResult(error instanceof Error ? error.message : 'Could not update your password.');
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   // Key metrics
@@ -336,16 +431,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
   const confirmedCount = bookings.filter(b => b && (b.bookingStatus === 'confirmed' || (b as any).booking_status === 'confirmed')).length;
   const pendingCount = bookings.filter(b => b && (b.bookingStatus === 'pending_approval' || (b as any).booking_status === 'pending_approval')).length;
   const cancelledCount = bookings.filter(b => b && (b.bookingStatus === 'cancelled' || (b as any).booking_status === 'cancelled')).length;
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const upcomingBookings = bookings
-    .filter(booking => {
-      const status = booking.bookingStatus || (booking as any).booking_status || 'confirmed';
-      return status !== 'cancelled' && booking.checkOutDate >= todayKey;
-    })
-    .sort((first, second) => first.checkInDate.localeCompare(second.checkInDate));
-  const activeUnitCount = units.filter(unit => unit.isActive !== false).length;
-  const activeRoomCount = allRooms.filter(room => room.isActive !== false).length;
-  const attentionCount = pendingCount + refundsNeedingReconciliation;
 
   const filteredBookings = bookings.filter(b => {
     if (!b) return false;
@@ -374,19 +459,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
     const updated = await updateBookingStatus(bookingId, { bookingStatus, paymentStatus, refundedAmount });
     if (!updated) {
       alert('Could not update that reservation. Check your management access and try again.');
-      return;
-    }
-    onRefreshData();
-  };
-
-  const handleVerifyPaystackPayment = async (booking: Booking) => {
-    if (!booking.paymentReference) {
-      alert('This reservation does not have a Paystack reference yet. Ask the guest to complete checkout or retry payment.');
-      return;
-    }
-    const result = await verifyPaystackCheckout(booking.paymentReference);
-    if (!result.success) {
-      alert(result.error || 'Paystack has not confirmed this payment yet.');
       return;
     }
     onRefreshData();
@@ -696,8 +768,8 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       } else {
         await addRoomToUnit(roomParentUnitId, payload);
       }
-      await onRefreshData();
       setIsRoomModalOpen(false);
+      onRefreshData();
       alert(editingRoomId ? 'Room updated successfully!' : 'New room added to apartment successfully!');
     } catch (error) {
       console.error('Could not save room:', error);
@@ -737,7 +809,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
       onUpdateSiteSettings?.(updated);
       setSettingsForm(updated);
       setSettingsSavedToast(true);
-      onRefreshData();
       setTimeout(() => setSettingsSavedToast(false), 3000);
     } catch (error) {
       setSettingsSaveError(error instanceof Error ? error.message : 'Site settings could not be saved.');
@@ -783,7 +854,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
               Host Management Portal
             </span>
             <span className="text-[10px] text-stone-400 font-mono">
-              adradhomesgh.com · Admin Console
+              www.aradadhomesgh.com · Admin Console
             </span>
           </div>
         </div>
@@ -1056,36 +1127,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                     </span>
                   )}
                 </div>
-
-                <div className="p-4 bg-stone-950 rounded-xl border border-stone-800">
-                  <span className="text-xs text-stone-400 block mb-1">Upcoming Arrivals</span>
-                  <div className="font-mono text-3xl font-bold text-sky-300 tabular-nums">
-                    {upcomingBookings.length}
-                  </div>
-                  <span className="text-[11px] text-stone-500 mt-1 block">
-                    Confirmed and pending stays from today
-                  </span>
-                </div>
-
-                <div className="p-4 bg-stone-950 rounded-xl border border-stone-800">
-                  <span className="text-xs text-stone-400 block mb-1">Live Inventory</span>
-                  <div className="font-mono text-3xl font-bold text-white tabular-nums">
-                    {activeUnitCount + activeRoomCount}
-                  </div>
-                  <span className="text-[11px] text-stone-500 mt-1 block">
-                    {activeUnitCount} apartments · {activeRoomCount} rooms active
-                  </span>
-                </div>
-
-                <div className="p-4 bg-stone-950 rounded-xl border border-stone-800">
-                  <span className="text-xs text-stone-400 block mb-1">Needs Attention</span>
-                  <div className={`font-mono text-3xl font-bold tabular-nums ${attentionCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    {attentionCount}
-                  </div>
-                  <span className="text-[11px] text-stone-500 mt-1 block">
-                    Pending approvals or refund checks
-                  </span>
-                </div>
               </div>
 
               {/* Quick Actions & Recent Bookings */}
@@ -1104,7 +1145,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                   </div>
 
                   <div className="divide-y divide-stone-800/80 text-xs">
-                    {upcomingBookings.slice(0, 4).map(b => (
+                    {bookings.slice(0, 4).map(b => (
                       <div key={b.id} className="py-3 flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
@@ -1137,11 +1178,6 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                         </div>
                       </div>
                     ))}
-                    {upcomingBookings.length === 0 && (
-                      <div className="py-8 text-center text-xs text-stone-500">
-                        No upcoming stays. New reservations will appear here.
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1338,37 +1374,16 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                           </td>
                           <td className="p-3 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {b.paymentGateway === 'paystack' && b.paymentStatus !== 'paid' && b.paymentReference && (
-                                <button
-                                  onClick={() => void handleVerifyPaystackPayment(b)}
-                                  title="Verify this Paystack payment"
-                                  className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-700 hover:bg-emerald-600 text-white rounded"
-                                >
-                                  Verify Pay
-                                </button>
-                              )}
                               {b.bookingStatus === 'pending_approval' && (
                                 <button
                                   onClick={() => handleUpdateStatus(b.id, 'confirmed')}
-                                  disabled={b.paymentStatus !== 'paid' && b.paymentStatus !== 'verified'}
-                                  title={b.paymentStatus !== 'paid' && b.paymentStatus !== 'verified'
-                                    ? 'Mark the payment as paid or verified before approval.'
-                                    : 'Approve Reservation'}
+                                  title="Approve Reservation"
                                   className="p-1.5 text-emerald-400 hover:bg-emerald-950 rounded disabled:cursor-not-allowed disabled:opacity-35"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                 </button>
                               )}
-                              {b.paymentStatus === 'pending' && b.paymentGateway === 'cash' && (
-                                <button
-                                  onClick={() => handleUpdateStatus(b.id, undefined, 'paid')}
-                                  title="Confirm cash received"
-                                  className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded"
-                                >
-                                  Mark Cash Paid
-                                </button>
-                              )}
-                              {b.paymentStatus === 'pending' && b.paymentGateway !== 'paystack' && b.paymentGateway !== 'cash' && (
+                              {b.paymentStatus === 'pending' && (
                                 <button
                                   onClick={() => handleUpdateStatus(b.id, undefined, 'verified')}
                                   title="Mark manual payment as verified after checking the transfer."
@@ -2057,10 +2072,8 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                       <input
                         type="text"
                         value={settingsForm.poweredBy}
-                        readOnly
-                        aria-readonly="true"
-                        title="Engineering attribution is managed by the platform and cannot be changed here."
-                        className="w-full cursor-not-allowed bg-stone-950 border border-stone-800 rounded-lg px-3 py-2 text-sm text-stone-500 font-semibold"
+                        onChange={e => setSettingsForm({ ...settingsForm, poweredBy: e.target.value })}
+                        className="w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white font-semibold"
                       />
                     </div>
                   </div>
@@ -2137,7 +2150,7 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
             </div>
           )}
 
-          {/* TAB 8: STAFF ACCOUNTS */}
+          {/* TAB 7: STAFF ACCOUNTS */}
           {activeTab === 'staff' && (
             <div className="max-w-4xl space-y-6">
               <div className="pb-2 border-b border-stone-800">
@@ -2146,136 +2159,269 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
               </div>
               {currentUser.role === 'admin' ? (
                 <>
-                  <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
-                    <div>
-                      <h3 className="font-semibold text-white">Add a management account</h3>
-                      <p className="text-xs text-stone-400 mt-1">Create a staff, manager, or co-admin account directly. The email is confirmed automatically.</p>
-                    </div>
-                    <form onSubmit={handleCreateStaff} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <label className="text-xs text-stone-300">
+                <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-white">My administrator profile</h3>
+                    <p className="text-xs text-stone-400 mt-1">Update your dashboard profile and password.</p>
+                  </div>
+                  {staffProfileDrafts[currentUser.id] && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <label className="text-xs text-stone-400">
                         Full name
                         <input
-                          type="text"
-                          value={newStaffForm.fullName}
-                          onChange={event => setNewStaffForm({ ...newStaffForm, fullName: event.target.value })}
-                          minLength={2}
+                          value={staffProfileDrafts[currentUser.id].fullName}
                           maxLength={120}
-                          required
-                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                          onChange={event => setStaffProfileDrafts(drafts => ({
+                            ...drafts,
+                            [currentUser.id]: { ...drafts[currentUser.id], fullName: event.target.value },
+                          }))}
+                          className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
                         />
                       </label>
-                      <label className="text-xs text-stone-300">
-                        Email address
+                      <label className="text-xs text-stone-400">
+                        Phone
                         <input
-                          type="email"
-                          value={newStaffForm.email}
-                          onChange={event => setNewStaffForm({ ...newStaffForm, email: event.target.value })}
-                          required
-                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                          value={staffProfileDrafts[currentUser.id].phone}
+                          maxLength={40}
+                          onChange={event => setStaffProfileDrafts(drafts => ({
+                            ...drafts,
+                            [currentUser.id]: { ...drafts[currentUser.id], phone: event.target.value },
+                          }))}
+                          className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
                         />
                       </label>
-                      <label className="text-xs text-stone-300">
-                        Temporary password
+                      <label className="text-xs text-stone-400">
+                        Job title
                         <input
-                          type="password"
-                          value={newStaffForm.password}
-                          onChange={event => setNewStaffForm({ ...newStaffForm, password: event.target.value })}
-                          minLength={8}
-                          required
-                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
+                          value={staffProfileDrafts[currentUser.id].title}
+                          maxLength={100}
+                          onChange={event => setStaffProfileDrafts(drafts => ({
+                            ...drafts,
+                            [currentUser.id]: { ...drafts[currentUser.id], title: event.target.value },
+                          }))}
+                          className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
                         />
                       </label>
-                      <label className="text-xs text-stone-300">
-                        Access level
-                        <select
-                          value={newStaffForm.role}
-                          onChange={event => setNewStaffForm({ ...newStaffForm, role: event.target.value as AuthUser['role'] })}
-                          className="mt-1 w-full bg-stone-900 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white"
-                        >
-                          <option value="staff">Staff</option>
-                          <option value="manager">Manager</option>
-                          <option value="admin">Co-admin</option>
-                        </select>
-                      </label>
-                      <div className="md:col-span-2 flex items-center justify-between gap-3">
-                        {staffCreateMessage ? (
-                          <p role={staffCreateMessage.success ? 'status' : 'alert'} className={`text-xs ${staffCreateMessage.success ? 'text-emerald-300' : 'text-red-300'}`}>
-                            {staffCreateMessage.text}
-                          </p>
-                        ) : <span />}
+                      <div className="md:col-span-3 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs text-stone-500">{currentUser.email} · Administrator</p>
                         <button
-                          type="submit"
-                          disabled={isCreatingStaff}
-                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-stone-950 rounded-lg text-xs font-bold"
+                          type="button"
+                          onClick={() => void handleSaveStaffProfile(currentUser)}
+                          disabled={savingStaffProfileId === currentUser.id}
+                          className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-stone-950 hover:bg-amber-400 disabled:opacity-50"
                         >
-                          {isCreatingStaff ? 'Creating…' : 'Create Account'}
+                          {savingStaffProfileId === currentUser.id ? 'Saving…' : 'Save profile'}
                         </button>
                       </div>
-                    </form>
-                  </section>
-
-                  <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="font-semibold text-white">Management accounts</h3>
-                        <p className="text-xs text-stone-400 mt-1">Active staff and administrators who can access the portal.</p>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-full bg-stone-900 text-stone-300 border border-stone-800 text-xs font-semibold">
-                        {staffAccounts.filter(account => account.isActive).length} active
-                      </span>
                     </div>
-                    {staffAccountsError && <div role="alert" className="p-3 bg-red-950/70 border border-red-900 rounded-lg text-xs text-red-200">{staffAccountsError}</div>}
-                    {staffAccountsLoading ? (
-                      <p className="text-xs text-stone-400 py-4">Loading management accounts…</p>
-                    ) : staffAccounts.length === 0 ? (
-                      <p className="text-xs text-stone-400 py-4">No management accounts found.</p>
-                    ) : (
-                      <div className="divide-y divide-stone-800 border border-stone-800 rounded-lg">
-                        {staffAccounts.map(account => (
-                          <div key={account.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3">
-                            <div className="min-w-0">
-                              <div className="font-semibold text-white truncate">{account.name}</div>
-                              <div className="text-xs text-stone-400 break-all">{account.email}</div>
+                  )}
+                </section>
+
+                <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-white">Add a management account</h3>
+                    <p className="text-xs text-stone-400 mt-1">Create a login and assign the minimum dashboard access it needs.</p>
+                  </div>
+                  <form onSubmit={handleCreateStaffAccount} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="text-xs text-stone-400">
+                      Full name
+                      <input
+                        required
+                        minLength={2}
+                        maxLength={120}
+                        value={newStaff.fullName}
+                        onChange={event => setNewStaff(staff => ({ ...staff, fullName: event.target.value }))}
+                        className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-stone-400">
+                      Email
+                      <input
+                        required
+                        type="email"
+                        autoComplete="email"
+                        value={newStaff.email}
+                        onChange={event => setNewStaff(staff => ({ ...staff, email: event.target.value }))}
+                        className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-stone-400">
+                      Temporary password
+                      <input
+                        required
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        value={newStaff.password}
+                        onChange={event => setNewStaff(staff => ({ ...staff, password: event.target.value }))}
+                        className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-stone-400">
+                      Dashboard role
+                      <select
+                        value={newStaff.role}
+                        onChange={event => setNewStaff(staff => ({ ...staff, role: event.target.value as AuthUser['role'] }))}
+                        className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                      >
+                        <option value="staff">Staff — reservations</option>
+                        <option value="manager">Manager — property operations</option>
+                        <option value="admin">Administrator — all settings and accounts</option>
+                      </select>
+                    </label>
+                    <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[11px] text-amber-300">Share temporary passwords privately. Ask each user to change it after their first sign-in.</p>
+                      <button
+                        type="submit"
+                        disabled={creatingStaff}
+                        className="rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-stone-950 hover:bg-amber-400 disabled:opacity-50"
+                      >
+                        {creatingStaff ? 'Creating account…' : 'Create account'}
+                      </button>
+                    </div>
+                    {newStaffResult && (
+                      <p role="status" className="md:col-span-2 text-xs text-stone-300">{newStaffResult}</p>
+                    )}
+                  </form>
+                </section>
+
+                <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-white">Management profiles</h3>
+                      <p className="text-xs text-stone-400 mt-1">Edit access levels, contact details, and account status.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void loadStaffAccounts()}
+                      disabled={staffAccountsLoading}
+                      className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-xs font-semibold text-stone-300 hover:bg-stone-800 disabled:opacity-50"
+                    >
+                      {staffAccountsLoading ? 'Loading…' : 'Refresh profiles'}
+                    </button>
+                  </div>
+                  {staffAccountsError && <div role="alert" className="rounded-lg border border-red-900 bg-red-950/70 p-3 text-xs text-red-200">{staffAccountsError}</div>}
+                  {staffAccountsLoading ? (
+                    <p className="py-3 text-xs text-stone-400">Loading management profiles…</p>
+                  ) : staffAccounts.filter(account => account.id !== currentUser.id).length === 0 ? (
+                    <p className="py-3 text-xs text-stone-400">No other management profiles yet. Add an account above or approve a pending request.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {staffAccounts.filter(account => account.id !== currentUser.id).map(account => {
+                        const draft = staffProfileDrafts[account.id];
+                        if (!draft) return null;
+                        return (
+                          <div key={account.id} className="rounded-xl border border-stone-800 bg-stone-900 p-4 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">{account.email}</p>
+                                <p className="text-[11px] text-stone-500">Added {new Date(account.createdAt).toLocaleDateString()}</p>
+                              </div>
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${account.isActive ? 'bg-emerald-950 text-emerald-300' : 'bg-stone-800 text-stone-400'}`}>
+                                {account.isActive ? 'Active' : 'Disabled'}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className={`self-start sm:self-auto px-2 py-1 rounded text-[10px] font-bold uppercase ${account.isActive ? 'bg-emerald-950 text-emerald-300' : 'bg-stone-800 text-stone-300'}`}>
-                                {account.isActive ? 'Active' : 'Inactive'}
-                              </span>
-                              <span className="self-start sm:self-auto px-2 py-1 rounded bg-amber-950 text-amber-300 text-[10px] font-bold uppercase">
-                                {account.role === 'admin' ? 'Co-admin' : account.role}
-                              </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              <label className="text-[11px] text-stone-400">
+                                Full name
+                                <input
+                                  value={draft.fullName}
+                                  maxLength={120}
+                                  onChange={event => setStaffProfileDrafts(drafts => ({ ...drafts, [account.id]: { ...drafts[account.id], fullName: event.target.value } }))}
+                                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-950 px-2.5 py-2 text-xs text-white"
+                                />
+                              </label>
+                              <label className="text-[11px] text-stone-400">
+                                Phone
+                                <input
+                                  value={draft.phone}
+                                  maxLength={40}
+                                  onChange={event => setStaffProfileDrafts(drafts => ({ ...drafts, [account.id]: { ...drafts[account.id], phone: event.target.value } }))}
+                                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-950 px-2.5 py-2 text-xs text-white"
+                                />
+                              </label>
+                              <label className="text-[11px] text-stone-400">
+                                Job title
+                                <input
+                                  value={draft.title}
+                                  maxLength={100}
+                                  onChange={event => setStaffProfileDrafts(drafts => ({ ...drafts, [account.id]: { ...drafts[account.id], title: event.target.value } }))}
+                                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-950 px-2.5 py-2 text-xs text-white"
+                                />
+                              </label>
+                              <label className="text-[11px] text-stone-400">
+                                Dashboard role
+                                <select
+                                  value={draft.role}
+                                  onChange={event => setStaffProfileDrafts(drafts => ({ ...drafts, [account.id]: { ...drafts[account.id], role: event.target.value as AuthUser['role'] } }))}
+                                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-950 px-2.5 py-2 text-xs text-white"
+                                >
+                                  <option value="staff">Staff</option>
+                                  <option value="manager">Manager</option>
+                                  <option value="admin">Administrator</option>
+                                </select>
+                              </label>
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() => handleToggleStaffAccount(account)}
-                                disabled={actioningStaffAccountId === account.id}
-                                className="px-2.5 py-1.5 rounded border border-stone-700 bg-stone-900 text-[10px] font-bold uppercase text-white hover:border-stone-500 disabled:opacity-50"
+                                onClick={() => void handleToggleStaffStatus(account)}
+                                disabled={changingStaffStatusId === account.id}
+                                className="rounded-lg border border-stone-700 px-3 py-1.5 text-xs font-semibold text-stone-300 hover:bg-stone-800 disabled:opacity-50"
                               >
-                                {actioningStaffAccountId === account.id ? 'Updating…' : account.isActive ? 'Deactivate' : 'Activate'}
+                                {changingStaffStatusId === account.id ? 'Updating…' : account.isActive ? 'Disable account' : 'Enable account'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleSaveStaffProfile(account)}
+                                disabled={savingStaffProfileId === account.id}
+                                className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-stone-950 hover:bg-amber-400 disabled:opacity-50"
+                              >
+                                {savingStaffProfileId === account.id ? 'Saving…' : 'Save profile'}
                               </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </section>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
 
-                  <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <h3 className="font-semibold text-white">Pending access requests</h3>
                       <p className="text-xs text-stone-400 mt-1">Review each verified email and assign only the access level it needs.</p>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full bg-amber-950 text-amber-300 border border-amber-900 text-xs font-semibold">
-                      {signupRequests.length} pending
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full bg-amber-950 text-amber-300 border border-amber-900 text-xs font-semibold">
+                        {signupRequestsError ? 'Unavailable' : `${signupRequests.length} pending`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void loadSignupRequests()}
+                        disabled={signupRequestsLoading}
+                        aria-label="Refresh staff access requests"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-stone-700 bg-stone-900 px-2.5 py-1.5 text-xs font-semibold text-stone-300 hover:bg-stone-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${signupRequestsLoading ? 'animate-spin' : ''}`} />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
                   </div>
                   {signupRequestsError && (
-                    <div role="alert" className="p-3 bg-red-950/70 border border-red-900 rounded-lg text-xs text-red-200">{signupRequestsError}</div>
+                    <div role="alert" className="p-3 bg-red-950/70 border border-red-900 rounded-lg text-xs text-red-200">
+                      {signupRequestsError} Use Refresh to try again.
+                    </div>
                   )}
                   {signupRequestsLoading ? (
                     <p className="text-xs text-stone-400 py-4">Loading requests…</p>
                   ) : signupRequests.length === 0 ? (
-                    <p className="text-xs text-stone-400 py-4">There are no pending staff requests.</p>
+                    <p className="text-xs text-stone-400 py-4">
+                      {signupRequestsError
+                        ? 'Pending requests could not be loaded.'
+                        : 'There are no pending requests. Staff can request access from the sign-in screen; verified requests will appear here.'}
+                    </p>
                   ) : (
                     <div className="space-y-3">
                       {signupRequests.map(request => (
@@ -2322,13 +2468,72 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
                       ))}
                     </div>
                   )}
-                  </section>
+                </section>
                 </>
               ) : (
                 <div className="p-4 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-400">
-                  Access requests can only be reviewed by an active administrator.
+                  <h3 className="font-semibold text-white">{currentUser.name}</h3>
+                  <p className="mt-1">{currentUser.email} · {currentUser.role}</p>
+                  {currentUser.title && <p className="mt-1">{currentUser.title}</p>}
+                  {currentUser.phone && <p className="mt-1">{currentUser.phone}</p>}
                 </div>
               )}
+              <section className="bg-stone-950 p-5 rounded-xl border border-stone-800 space-y-4">
+                <div>
+                  <h3 className="font-semibold text-white">Change your password</h3>
+                  <p className="text-xs text-stone-400 mt-1">Use at least 8 characters. Never share your password with another user.</p>
+                </div>
+                <form onSubmit={handleUpdateOwnPassword} className="grid grid-cols-1 md:grid-cols-3 items-end gap-3">
+                  <label className="text-xs text-stone-400">
+                    Current password
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      value={passwordForm.currentPassword}
+                      onChange={event => setPasswordForm(form => ({ ...form, currentPassword: event.target.value }))}
+                      placeholder="Confirm your current password"
+                      className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="text-xs text-stone-400">
+                    New password
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                      value={passwordForm.password}
+                      onChange={event => setPasswordForm(form => ({ ...form, password: event.target.value }))}
+                      placeholder="At least 8 characters"
+                      className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <label className="text-xs text-stone-400">
+                    Confirm new password
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                      value={passwordForm.confirmPassword}
+                      onChange={event => setPasswordForm(form => ({ ...form, confirmPassword: event.target.value }))}
+                      placeholder="Enter it again"
+                      className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-white"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={changingPassword}
+                    className="rounded-lg border border-stone-700 bg-stone-900 px-4 py-2 text-xs font-semibold text-stone-200 hover:bg-stone-800 disabled:opacity-50"
+                  >
+                    {changingPassword ? 'Updating…' : 'Change password'}
+                  </button>
+                  {passwordResult && (
+                    <p role="status" className="md:col-span-3 text-xs text-stone-300">{passwordResult}</p>
+                  )}
+                </form>
+              </section>
             </div>
           )}
         </main>
@@ -2545,8 +2750,8 @@ export const HostDashboardModal: React.FC<HostDashboardModalProps> = ({
 
       {/* Room Add / Edit Modal */}
       {isRoomModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-start justify-center p-4 overflow-y-auto">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full p-6 text-stone-200 my-0 sm:my-8 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl max-w-xl w-full p-6 text-stone-200 my-8 shadow-2xl">
             <div className="flex items-center justify-between pb-4 border-b border-stone-800 mb-6">
               <div>
                 <h3 className="font-serif text-xl font-bold text-white flex items-center gap-2">

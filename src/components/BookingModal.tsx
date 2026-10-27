@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Unit, Room, Currency, PaymentPreference, PaymentGateway, Booking, SiteSettings } from '../lib/types';
 import { calculateNights, formatDatePretty, getRoomMonthlyRate, getRoomWeeklyRate, USD_TO_GHS_RATE } from '../lib/utils';
-import { createBooking, initializePaystackCheckout, sendBookingConfirmationEmail } from '../lib/supabase';
+import { createBooking, sendBookingConfirmationEmail } from '../lib/supabase';
 import { AradadLogo } from './AradadLogo';
 import {
   X,
   Calendar,
   User,
-  CreditCard,
   CheckCircle2,
   Copy,
   Printer,
@@ -68,12 +67,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [specialRequests, setSpecialRequests] = useState('');
 
   const [paymentPref, setPaymentPref] = useState<PaymentPreference>('full');
-  const [paymentGateway, setPaymentGateway] = useState<PaymentGateway>('paystack');
+  const [paymentGateway, setPaymentGateway] = useState<PaymentGateway>('mobile_money');
   const [agreeRules, setAgreeRules] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState('');
   const [bookingError, setBookingError] = useState('');
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
@@ -140,19 +138,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   const choosePaymentPreference = (preference: PaymentPreference) => {
     setPaymentPref(preference);
-    setPaymentGateway(current => preference === 'arrival' ? 'cash' : current === 'cash' ? 'paystack' : current);
-  };
-
-  const retryPaystackCheckout = async (booking: Booking) => {
-    setIsRetryingPayment(true);
-    setPaymentNotice('');
-    const result = await initializePaystackCheckout(booking);
-    if (result.success && result.authorizationUrl) {
-      window.location.assign(result.authorizationUrl);
-      return;
-    }
-    setPaymentNotice(result.error || 'Paystack checkout could not be started.');
-    setIsRetryingPayment(false);
+    setPaymentGateway(preference === 'arrival' ? 'cash' : 'mobile_money');
   };
 
   const handleNextToGuest = () => {
@@ -200,21 +186,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     try {
       const res = await createBooking(bookingPayload);
       if (res.success && res.data) {
-        if (res.data.paymentGateway === 'paystack') {
-          const checkout = await initializePaystackCheckout(res.data);
-          if (checkout.success && checkout.authorizationUrl) {
-            window.location.assign(checkout.authorizationUrl);
-            return;
-          }
-          setConfirmedBooking(res.data);
-          onBookingSuccess(res.data);
-          setPaymentNotice(checkout.error || 'Paystack checkout could not be started. Your reservation request is saved.');
-          setStep(4);
-          return;
-        }
+        await sendBookingConfirmationEmail(res.data);
         setConfirmedBooking(res.data);
         onBookingSuccess(res.data);
-        void sendBookingConfirmationEmail(res.data);
         setStep(4);
         try {
           confetti({
@@ -570,24 +544,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     <span className="text-xs block">Bank Transfer</span>
                     <span className="text-[10px] text-stone-400 block">Osu Branch Wire</span>
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentGateway('paystack')}
-                    className={`p-2.5 rounded-lg border text-center transition-all ${
-                      paymentGateway === 'paystack'
-                        ? 'border-amber-600 bg-amber-50/60 font-semibold text-stone-900'
-                        : 'border-stone-200 hover:border-stone-300 text-stone-600'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4 mx-auto mb-1 text-amber-700" />
-                    <span className="text-xs block">Paystack Checkout</span>
-                    <span className="text-[10px] text-stone-400 block">Card / Mobile Money</span>
-                  </button>
                 </div>
-                {paymentGateway === 'paystack' && (
-                  <p className="mt-2 text-[11px] text-stone-500">You will continue to Paystack’s secure checkout. Aradad Homes does not store card details.</p>
-                )}
               </div> : (
                 <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-700">
                   Payment will be collected on arrival. Your room request will be saved first.
@@ -624,13 +581,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 </div>
               )}
 
-              {paymentGateway === 'paystack' && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-950">
-                  Paystack will charge {formatAmount(paymentPref === 'deposit' ? depositRequired : totalAmount, bookingCurrency)} now
-                  {currency !== bookingCurrency && <> (about {formatDisplayAmount(paymentPref === 'deposit' ? depositRequired : totalAmount)} in {currency})</>}. Your room is held as a request until payment is verified.
-                </div>
-              )}
-
               {/* House Rules & Policies Checkbox */}
               {bookingError && (
                 <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -663,9 +613,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     : <AlertTriangle className="w-7 h-7" />}
                 </div>
                 <h3 className="font-serif text-2xl font-bold text-stone-900">
-                  {confirmedBooking.paymentGateway === 'paystack' && confirmedBooking.paymentStatus !== 'paid'
-                    ? 'Payment Not Complete'
-                    : confirmedBooking.bookingStatus === 'confirmed' ? 'Reservation Confirmed!' : 'Reservation Request Received'}
+                  {confirmedBooking.bookingStatus === 'confirmed' ? 'Reservation Confirmed!' : 'Reservation Request Received'}
                 </h3>
                 <p className="text-xs text-stone-500 font-mono mt-1">
                   Booking Reference: <strong className="text-stone-900 text-sm">{confirmedBooking.bookingCode}</strong>
@@ -675,12 +623,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               {paymentNotice && (
                 <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
                   <p>{paymentNotice}</p>
-                  {confirmedBooking.paymentGateway === 'paystack' && confirmedBooking.paymentStatus !== 'paid' && (
-                    <button type="button" onClick={() => void retryPaystackCheckout(confirmedBooking)} disabled={isRetryingPayment}
-                      className="mt-3 rounded-lg bg-amber-500 px-4 py-2 font-semibold text-stone-950 disabled:opacity-60">
-                      {isRetryingPayment ? 'Opening Paystack…' : 'Retry Paystack Checkout'}
-                    </button>
-                  )}
                 </div>
               )}
 
@@ -743,16 +685,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     Payment Method: {String(confirmedBooking.paymentGateway || 'mobile_money').replace('_', ' ').toUpperCase()}
                   </div>
                 </div>
-
-                {confirmedBooking.paymentGateway === 'paystack' && confirmedBooking.paymentStatus !== 'paid' && !paymentNotice && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-950">
-                    Online payment is still pending. Do not treat this reservation as confirmed until Paystack verifies payment.
-                    <button type="button" onClick={() => void retryPaystackCheckout(confirmedBooking)} disabled={isRetryingPayment}
-                      className="ml-2 font-bold underline disabled:opacity-60">
-                      {isRetryingPayment ? 'Opening checkout…' : 'Continue to Paystack'}
-                    </button>
-                  </div>
-                )}
 
                 {(confirmedBooking.paymentGateway === 'mobile_money' || confirmedBooking.paymentGateway === 'bank_transfer') && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-950">
@@ -864,6 +796,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         {step === 4 && (
           <div className="px-6 py-4 border-t border-stone-200 bg-stone-50 flex justify-end">
             <button
+              type="button"
               onClick={onClose}
               className="px-6 py-2 text-xs font-semibold bg-stone-900 hover:bg-stone-800 text-white rounded-lg transition-colors"
             >

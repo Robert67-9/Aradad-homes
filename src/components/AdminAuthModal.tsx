@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
   AuthUser,
+  resendAdminSignupOtp,
+  retryVerifiedSignupRequest,
   requestAdminSignupOtp,
   signInAdminWithPassword,
   verifySignupOtpAndRequestAccess,
@@ -24,6 +26,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [signupAttempted, setSignupAttempted] = useState(false);
   const [signupSubmitted, setSignupSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -33,18 +37,38 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
 
   const sendOtp = async () => {
     setLoading(true);
+    setSignupAttempted(true);
     setErrorMsg('');
     setSuccessMsg('');
     try {
       const result = await requestAdminSignupOtp(email, password);
       if (result.success) {
         setOtpSent(true);
-        setSuccessMsg('If this email can request access, a one-time verification code has been sent.');
+        setSuccessMsg('Supabase accepted the signup. Check your inbox and spam folder. Your access request is created only after you verify the code.');
       } else {
         setErrorMsg(result.error || 'Could not send a one-time code.');
       }
     } catch {
       setErrorMsg('Could not send a one-time code. Check the email and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const result = await resendAdminSignupOtp(email);
+      if (result.success) {
+        setOtpSent(true);
+        setSuccessMsg('Supabase accepted the resend request. Check your inbox and spam folder.');
+      } else {
+        setErrorMsg(result.error || 'Could not resend the verification code.');
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not resend the verification code.');
     } finally {
       setLoading(false);
     }
@@ -92,15 +116,18 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
     setLoading(true);
     setErrorMsg('');
     try {
-      const result = await verifySignupOtpAndRequestAccess(email, otp, fullName);
+      const result = otpVerified
+        ? await retryVerifiedSignupRequest(email, fullName)
+        : await verifySignupOtpAndRequestAccess(email, otp, fullName);
       if (result.success) {
         setSignupSubmitted(true);
         setSuccessMsg('Your email is verified. An administrator will review your access request.');
       } else {
+        if (result.verified) setOtpVerified(true);
         setErrorMsg(result.error || 'Could not submit your access request.');
       }
-    } catch {
-      setErrorMsg('Could not submit your request. Request a new code and try again.');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Could not submit your request. Try again.');
     } finally {
       setLoading(false);
     }
@@ -108,6 +135,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
 
   const handleUseDifferentEmail = () => {
     setOtpSent(false);
+    setOtpVerified(false);
     setSignupSubmitted(false);
     setPassword('');
     setConfirmPassword('');
@@ -119,6 +147,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
   const handleModeChange = (nextMode: AuthMode) => {
     setMode(nextMode);
     setOtpSent(false);
+    setOtpVerified(false);
+    setSignupAttempted(false);
     setSignupSubmitted(false);
     setPassword('');
     setConfirmPassword('');
@@ -135,6 +165,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
     setConfirmPassword('');
     setOtp('');
     setOtpSent(false);
+    setOtpVerified(false);
+    setSignupAttempted(false);
     setSignupSubmitted(false);
     setErrorMsg('');
     setSuccessMsg('');
@@ -162,7 +194,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
       <div className="bg-stone-900 border border-stone-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col text-stone-100">
         <div className="p-6 border-b border-stone-800 flex items-center justify-between bg-stone-950/70">
           <AradadLogo size="md" />
-          <button onClick={handleClose} aria-label="Close sign in" className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 flex items-center justify-center text-stone-400 hover:text-white transition-colors">
+          <button type="button" onClick={handleClose} aria-label="Close sign in" className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 flex items-center justify-center text-stone-400 hover:text-white transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -177,7 +209,14 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
           {errorMsg && (
             <div role="alert" className="p-3 bg-red-950/80 border border-red-800 text-red-200 rounded-lg text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
+              <div>
+                <span>{errorMsg}</span>
+                {mode === 'signup' && signupAttempted && !otpSent && (
+                  <button type="button" disabled={loading} onClick={() => void handleResendOtp()} className="ml-1 font-semibold text-amber-300 underline disabled:opacity-50">
+                    Try resending the code
+                  </button>
+                )}
+              </div>
             </div>
           )}
           {successMsg && (
@@ -298,34 +337,47 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({ isOpen, onClose,
             </>
           ) : (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider">
-                One-time email code
-                <span className="relative mt-1.5 block">
-                  <KeyRound className="w-4 h-4 text-stone-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]{6,8}"
-                    maxLength={8}
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Enter the code"
-                    className="w-full bg-stone-950 border border-stone-700 rounded-lg pl-9 pr-3 py-2.5 text-lg tracking-[0.35em] text-white focus:outline-none focus:border-amber-400 font-mono"
-                    required
-                  />
-                </span>
-              </label>
-              <button type="submit" disabled={loading || otp.length < 6} className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-lg text-sm transition-colors shadow-md disabled:opacity-50">
-                {loading ? 'Verifying…' : mode === 'signup' ? 'Verify code and submit request' : 'Verify code and sign in'}
+              {otpVerified ? (
+                <div role="status" className="rounded-lg border border-emerald-800 bg-emerald-950/70 p-3 text-xs text-emerald-200">
+                  Email verified. The access request has not been saved yet; retry submission below.
+                </div>
+              ) : (
+                <label className="block text-xs font-semibold text-stone-300 uppercase tracking-wider">
+                  One-time email code
+                  <span className="relative mt-1.5 block">
+                    <KeyRound className="w-4 h-4 text-stone-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6,8}"
+                      maxLength={8}
+                      value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Enter the code"
+                      className="w-full bg-stone-950 border border-stone-700 rounded-lg pl-9 pr-3 py-2.5 text-lg tracking-[0.35em] text-white focus:outline-none focus:border-amber-400 font-mono"
+                      required
+                    />
+                  </span>
+                </label>
+              )}
+              <button type="submit" disabled={loading || (!otpVerified && otp.length < 6)} className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-lg text-sm transition-colors shadow-md disabled:opacity-50">
+                {loading ? (otpVerified ? 'Submitting request…' : 'Verifying…') : otpVerified ? 'Retry access request' : 'Verify code and submit request'}
               </button>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-stone-400">Sent to {email}</span>
                 <button type="button" onClick={handleUseDifferentEmail} className="text-amber-400 hover:underline">Use another email</button>
               </div>
-              <button type="button" disabled={loading} onClick={() => void sendOtp()} className="w-full text-xs text-stone-400 hover:text-white disabled:opacity-50">
-                Resend code
-              </button>
+              {!otpVerified && (
+                <>
+                  <p className="text-[11px] leading-relaxed text-stone-500">
+                    No code? Check spam, then resend. Email delivery requires a working SMTP provider and an Auth confirmation template containing {'{{ .Token }}'}.
+                  </p>
+                  <button type="button" disabled={loading} onClick={() => void handleResendOtp()} className="w-full text-xs text-stone-400 hover:text-white disabled:opacity-50">
+                    {loading ? 'Sending…' : 'Resend verification code'}
+                  </button>
+                </>
+              )}
             </form>
           )}
 

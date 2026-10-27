@@ -1,12 +1,10 @@
 ﻿import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { AdminSignupRequest, Booking, Unit, Room, BlockedDate, SupabaseConfig, SiteSettings } from './types';
+import { AdminSignupRequest, Booking, Unit, Room, BlockedDate, SiteSettings } from './types';
 import { APARTMENT_DATA, INITIAL_UNITS, DEFAULT_SITE_SETTINGS } from './mockData';
 import { resolveImageUrls } from './imageAssets';
 import { readStorageValue, removeStorageValue, writeStorageValue } from './cookies';
 
 const STORAGE_KEYS = {
-  SUPABASE_URL: 'aradad_supabase_url',
-  SUPABASE_ANON_KEY: 'aradad_supabase_anon_key',
   UNITS: 'aradad_local_units',
   SETTINGS: 'aradad_site_settings',
 };
@@ -80,57 +78,29 @@ export function isPublicSupabaseKey(key: unknown): boolean {
   }
 }
 
-// Retrieve configured or env-based Supabase credentials
-export function getStoredSupabaseConfig(): { url: string; anonKey: string } {
+// Supabase connection details are configured at build/deploy time, never in browser storage.
+function getConfiguredSupabaseConfig(): { url: string; anonKey: string } {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
-
-  const localUrl = typeof window !== 'undefined' ? readStorageValue(STORAGE_KEYS.SUPABASE_URL) || '' : '';
-  const localKey = typeof window !== 'undefined' ? readStorageValue(STORAGE_KEYS.SUPABASE_ANON_KEY) || '' : '';
-
-  // A deployment's reviewed endpoint cannot be replaced by browser-local settings.
-  let candidateUrl = (envUrl || localUrl || '').trim();
-  let candidateKey = (envKey || localKey || '').trim();
-
-  // Validate URL format
-  if (!isValidSupabaseUrl(candidateUrl)) {
-    candidateUrl = '';
-    // Clean invalid cached entry if present
-    if (typeof window !== 'undefined' && localUrl && !isValidSupabaseUrl(localUrl)) {
-      removeStorageValue(STORAGE_KEYS.SUPABASE_URL);
-    }
-  }
-
-  if (!isPublicSupabaseKey(candidateKey)) {
-    candidateKey = '';
-    if (typeof window !== 'undefined' && localKey) {
-      removeStorageValue(STORAGE_KEYS.SUPABASE_ANON_KEY);
-    }
-  }
-
+  const candidateUrl = typeof envUrl === 'string' && isValidSupabaseUrl(envUrl) ? envUrl.trim() : '';
+  const candidateKey = typeof envKey === 'string' && isPublicSupabaseKey(envKey) ? envKey.trim() : '';
   return {
     url: candidateUrl,
     anonKey: candidateKey,
   };
 }
 
-export function saveStoredSupabaseConfig(url: string, anonKey: string) {
-  supabaseInstance = null;
-  const trimmedUrl = (url || '').trim();
-  const trimmedKey = (anonKey || '').trim();
-  if (!isValidSupabaseUrl(trimmedUrl) || !isPublicSupabaseKey(trimmedKey)) return false;
-  if (typeof window !== 'undefined') {
-    writeStorageValue(STORAGE_KEYS.SUPABASE_URL, trimmedUrl);
-    writeStorageValue(STORAGE_KEYS.SUPABASE_ANON_KEY, trimmedKey);
-  }
-  return true;
-}
-
 // Client singleton
 let supabaseInstance: SupabaseClient | null = null;
+let legacySupabaseConfigRemoved = false;
 
 export function getSupabaseClient(): SupabaseClient | null {
-  const { url, anonKey } = getStoredSupabaseConfig();
+  if (typeof window !== 'undefined' && !legacySupabaseConfigRemoved) {
+    removeStorageValue('aradad_supabase_url');
+    removeStorageValue('aradad_supabase_anon_key');
+    legacySupabaseConfigRemoved = true;
+  }
+  const { url, anonKey } = getConfiguredSupabaseConfig();
   if (!url || !isValidSupabaseUrl(url) || !isPublicSupabaseKey(anonKey)) {
     supabaseInstance = null;
     return null;
@@ -145,48 +115,6 @@ export function getSupabaseClient(): SupabaseClient | null {
     }
   }
   return supabaseInstance;
-}
-
-export async function testSupabaseConnection(url: string, anonKey: string): Promise<{ success: boolean; message: string }> {
-  const cleanUrl = (url || '').trim();
-  const cleanKey = (anonKey || '').trim();
-
-  if (!cleanUrl || !cleanKey) {
-    return { success: false, message: 'Both Supabase Project URL and Anon Public Key are required.' };
-  }
-
-  if (!isValidSupabaseUrl(cleanUrl)) {
-    return {
-      success: false,
-      message: 'Invalid Supabase URL: use an HTTPS project URL (HTTP is allowed only for localhost).',
-    };
-  }
-
-  if (!isPublicSupabaseKey(cleanKey)) {
-    return { success: false, message: 'Use a Supabase publishable key or legacy anon public key. Secret and service-role keys are blocked in the browser.' };
-  }
-
-  try {
-    const testClient = createClient(cleanUrl, cleanKey);
-    const { error } = await testClient.from('units').select('id').limit(1);
-    if (error) {
-      if (
-        error.code === 'PGRST204' ||
-        error.code === '42P01' ||
-        error.message.includes('relation "public.units" does not exist') ||
-        error.message.includes('does not exist')
-      ) {
-        return {
-          success: true,
-          message: 'Connected to Supabase! Run the provided SQL Schema in your Supabase SQL Editor to initialize tables.',
-        };
-      }
-      return { success: false, message: `Supabase Error: ${error.message}` };
-    }
-    return { success: true, message: 'Successfully connected and verified database tables in Supabase!' };
-  } catch (err: any) {
-    return { success: false, message: err?.message || 'Failed to ping Supabase.' };
-  }
 }
 
 // Local Storage Helper for local mode
@@ -702,32 +630,6 @@ export async function createBooking(booking: GuestBookingInput): Promise<{ succe
   }
 }
 
-export async function initializePaystackCheckout(booking: Pick<Booking, 'id' | 'bookingCode' | 'guestEmail'>): Promise<{
-  success: boolean;
-  authorizationUrl?: string;
-  reference?: string;
-  error?: string;
-}> {
-  const client = getSupabaseClient();
-  if (!client) return { success: false, error: 'The secure payment service is not connected. No payment was taken.' };
-  try {
-    const { data, error } = await client.functions.invoke('paystack-initialize', {
-      body: { bookingId: booking.id, bookingCode: booking.bookingCode, guestEmail: booking.guestEmail },
-    });
-    if (error || !data?.authorizationUrl) {
-      console.error('Paystack checkout initialization failed:', error || data?.error);
-      return {
-        success: false,
-        error: data?.error || (error ? await readFunctionError(error, 'Paystack checkout could not be started. Your reservation request is saved; use the retry button or contact Aradad Homes.') : 'Paystack checkout could not be started. Your reservation request is saved; use the retry button or contact Aradad Homes.'),
-      };
-    }
-    return { success: true, authorizationUrl: data.authorizationUrl, reference: data.reference };
-  } catch (error) {
-    console.error('Paystack checkout request failed:', error);
-    return { success: false, error: 'We could not reach Paystack. Your reservation request is saved; retry checkout or contact Aradad Homes.' };
-  }
-}
-
 export async function sendBookingConfirmationEmail(booking: Pick<Booking, 'id' | 'bookingCode' | 'guestEmail'>): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
@@ -743,27 +645,6 @@ export async function sendBookingConfirmationEmail(booking: Pick<Booking, 'id' |
   } catch (error) {
     console.warn('Booking confirmation email request failed:', error);
     return false;
-  }
-}
-
-export async function verifyPaystackCheckout(reference: string): Promise<{
-  success: boolean;
-  bookingCode?: string;
-  bookingStatus?: Booking['bookingStatus'];
-  error?: string;
-}> {
-  const client = getSupabaseClient();
-  if (!client) return { success: false, error: 'The secure payment service is not connected.' };
-  try {
-    const { data, error } = await client.functions.invoke('paystack-verify', { body: { reference } });
-    if (error || !data?.success) {
-      console.error('Paystack payment verification failed:', error || data?.error);
-      return { success: false, error: data?.error || (error ? await readFunctionError(error, 'We could not confirm this payment yet.') : 'We could not confirm this payment yet.') };
-    }
-    return { success: true, bookingCode: data.bookingCode, bookingStatus: data.bookingStatus };
-  } catch (error) {
-    console.error('Paystack payment verification request failed:', error);
-    return { success: false, error: 'We could not reach the payment service to verify this payment.' };
   }
 }
 

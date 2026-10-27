@@ -1,6 +1,6 @@
-import React, { Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback } from 'react';
 import { Unit, Room, Booking, BlockedDate, Currency, SiteSettings } from './lib/types';
-import { fetchUnits, fetchBookings, fetchBlockedDates, fetchSiteSettings, getSiteSettings, getSupabaseClient, verifyPaystackCheckout } from './lib/supabase';
+import { fetchUnits, fetchBookings, fetchBlockedDates, fetchSiteSettings, getSiteSettings, getSupabaseClient } from './lib/supabase';
 import { INITIAL_UNITS } from './lib/mockData';
 import { AuthUser, getCurrentUser, logout } from './lib/auth';
 import { formatCurrency, getRoomMonthlyRate, getRoomWeeklyRate } from './lib/utils';
@@ -44,15 +44,6 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return !localStorage.getItem('aradad_cookie_consent');
   });
-  const [paystackReturn, setPaystackReturn] = useState<{
-    status: 'checking' | 'verified' | 'error';
-    reference: string;
-    bookingCode?: string;
-    bookingStatus?: Booking['bookingStatus'];
-    message?: string;
-  } | null>(null);
-  const paystackReturnStarted = useRef(false);
-
   // Load live data from Supabase or local storage when auth state changes.
   const loadData = useCallback(async () => {
     try {
@@ -85,44 +76,6 @@ export default function App() {
     const query = params.toString();
     window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const reference = params.get('reference') || params.get('trxref') || '';
-    if (params.get('paystack') !== 'return' && !reference) return;
-    if (paystackReturnStarted.current) return;
-    paystackReturnStarted.current = true;
-    params.delete('paystack');
-    params.delete('reference');
-    params.delete('trxref');
-    const query = params.toString();
-    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
-
-    if (!reference) {
-      setPaystackReturn({ status: 'error', reference: '', message: 'Paystack returned without a transaction reference. Contact Aradad Homes before trying another payment.' });
-      return;
-    }
-    setPaystackReturn({ status: 'checking', reference });
-    void verifyPaystackCheckout(reference).then(result => {
-      if (result.success) {
-        setPaystackReturn({ status: 'verified', reference, bookingCode: result.bookingCode, bookingStatus: result.bookingStatus });
-      } else {
-        setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
-      }
-    });
-  }, []);
-
-  const retryPaystackVerification = async () => {
-    const reference = paystackReturn?.reference;
-    if (!reference) return;
-    setPaystackReturn({ status: 'checking', reference });
-    const result = await verifyPaystackCheckout(reference);
-    if (result.success) {
-      setPaystackReturn({ status: 'verified', reference, bookingCode: result.bookingCode, bookingStatus: result.bookingStatus });
-    } else {
-      setPaystackReturn({ status: 'error', reference, message: `${result.error || 'The payment is not verified yet.'} Do not pay again until this transaction is checked.` });
-    }
-  };
 
   useEffect(() => {
     let isMounted = true;
@@ -226,30 +179,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans">
-      {paystackReturn && (
-        <div role="status" aria-live="polite" className="fixed top-4 left-1/2 z-[100] w-[min(92vw,36rem)] -translate-x-1/2 rounded-xl border border-stone-300 bg-white p-4 shadow-2xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold text-stone-900">
-                {paystackReturn.status === 'checking' ? 'Verifying Paystack payment…'
-                  : paystackReturn.status === 'verified' ? 'Payment verified'
-                    : 'Payment needs checking'}
-              </p>
-              <p className="mt-1 text-sm text-stone-600">
-                {paystackReturn.status === 'checking' ? 'Please wait while the secure payment service checks the transaction.'
-                  : paystackReturn.status === 'verified'
-                    ? `${paystackReturn.bookingCode ? `Booking ${paystackReturn.bookingCode}: ` : ''}${paystackReturn.bookingStatus === 'pending_approval' ? 'payment received; the stay is awaiting host approval.' : 'your reservation is confirmed.'}`
-                    : paystackReturn.message}
-              </p>
-              {paystackReturn.reference && <p className="mt-1 break-all font-mono text-[11px] text-stone-500">Payment reference: {paystackReturn.reference}</p>}
-              {paystackReturn.status === 'error' && paystackReturn.reference && (
-                <button type="button" onClick={() => void retryPaystackVerification()} className="mt-3 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-stone-950">Retry verification</button>
-              )}
-            </div>
-            <button type="button" onClick={() => setPaystackReturn(null)} aria-label="Dismiss payment status" className="rounded-full p-1 text-stone-500 hover:bg-stone-100">×</button>
-          </div>
-        </div>
-      )}
       {/* Navigation Top Bar */}
       <Navbar
         currency={currency}
@@ -528,6 +457,7 @@ export default function App() {
           onRefreshData={loadData}
           siteSettings={siteSettings}
           onUpdateSiteSettings={newSettings => setSiteSettings(newSettings)}
+          onCurrentUserUpdated={setCurrentUser}
         />
       )}
       </Suspense>

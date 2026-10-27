@@ -346,7 +346,7 @@ BEGIN
      OR p_check_in IS NULL OR p_check_out IS NULL OR p_check_out <= p_check_in
      OR p_check_in < (now() AT TIME ZONE 'Africa/Accra')::date
      OR p_payment_preference IS NULL OR p_payment_preference NOT IN ('full','deposit','arrival')
-     OR p_payment_gateway IS NULL OR p_payment_gateway NOT IN ('mobile_money','bank_transfer','paystack','cash')
+     OR p_payment_gateway IS NULL OR p_payment_gateway NOT IN ('mobile_money','bank_transfer','cash')
      OR (p_payment_preference = 'arrival' AND p_payment_gateway <> 'cash')
      OR (p_payment_preference <> 'arrival' AND p_payment_gateway = 'cash')
      OR length(COALESCE(p_special_requests,'')) > 2000 THEN
@@ -383,7 +383,7 @@ BEGIN
 
   PERFORM pg_advisory_xact_lock(hashtextextended(p_unit_id, 0));
   UPDATE public.bookings b SET booking_status = 'cancelled'
-  WHERE b.unit_id = p_unit_id AND b.payment_gateway = 'paystack' AND b.payment_status = 'pending'
+  WHERE b.unit_id = p_unit_id AND b.payment_status = 'pending'
     AND b.payment_hold_expires_at IS NOT NULL AND b.payment_hold_expires_at <= now()
     AND b.booking_status <> 'cancelled';
 
@@ -413,7 +413,7 @@ BEGIN
     round(v_subtotal + v_deposit,2), v_currency, p_payment_preference, p_payment_gateway, 'pending',
     CASE WHEN p_payment_preference = 'arrival' AND v_unit.booking_style = 'instant'
       THEN 'confirmed' ELSE 'pending_approval' END,
-    CASE WHEN p_payment_gateway = 'paystack' THEN now() + interval '30 minutes' ELSE NULL END,
+    NULL,
     nullif(btrim(COALESCE(p_special_requests,'')), '')
   ) RETURNING * INTO v_booking;
   RETURN v_booking;

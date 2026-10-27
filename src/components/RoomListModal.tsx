@@ -78,6 +78,20 @@ export const RoomListModal: React.FC<RoomListModalProps> = ({
   };
 
   useEffect(() => {
+    if (!unit || unit.images.length <= 1 || isFullscreenGalleryOpen) return;
+    const timer = window.setInterval(() => {
+      setSelectedPhoto(prev => {
+        if (!unit.images.length) return prev;
+        const currentIndex = unit.images.indexOf(prev);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % unit.images.length : 0;
+        return unit.images[nextIndex];
+      });
+    }, 3500);
+
+    return () => window.clearInterval(timer);
+  }, [unit, isFullscreenGalleryOpen]);
+
+  useEffect(() => {
     if (unit) {
       setSelectedPhoto(unit.images[0] || '');
       setSelectedRoomPhotos({});

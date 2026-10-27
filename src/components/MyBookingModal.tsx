@@ -91,14 +91,12 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
     if (booking.paymentStatus === 'refunded') {
       if (booking.refundedAmount === null) return 'The previous payment record has no refund amount or completion confirmation. Contact the host to confirm the refund.';
       const refundAmount = formatStoredMoney(booking.refundedAmount, booking.currency);
-      return booking.paymentGateway === 'paystack'
-        ? 'Paystack processed a ' + refundAmount + ' refund; your bank may take up to 10 business days'
-        : 'The host recorded a ' + refundAmount + ' refund as complete';
+      return 'The host recorded a ' + refundAmount + ' refund as complete';
     }
-    if (booking.paymentStatus === 'refund_pending') return 'Refund requested from Paystack';
-    if (booking.paymentStatus === 'refund_processing') return 'Paystack is processing the refund';
+    if (booking.paymentStatus === 'refund_pending') return 'Refund requested; the host is processing it';
+    if (booking.paymentStatus === 'refund_processing') return 'The host is processing your refund';
     if (booking.paymentStatus === 'refund_needs_attention') return 'Refund needs host follow-up; please contact the host';
-    if (booking.paymentStatus === 'refund_failed') return 'Paystack could not complete the refund; please contact the host';
+    if (booking.paymentStatus === 'refund_failed') return 'The refund could not complete automatically; please contact the host';
     if (booking.bookingStatus === 'cancelled') {
       return booking.paymentStatus === 'paid' || booking.paymentStatus === 'verified'
         ? 'Cancelled · contact the host about your eligible refund'
@@ -131,6 +129,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
             <p className="text-xs text-stone-400">{siteSettings.siteName} Guest Portal · {siteSettings.neighborhood}</p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 flex items-center justify-center text-stone-300 transition-colors"
           >
@@ -273,6 +272,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
 
                 {foundBooking.bookingStatus !== 'cancelled' && (
                   <button
+                    type="button"
                     onClick={handleCancelReservation}
                     className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold transition-colors"
                   >
@@ -286,6 +286,7 @@ export const MyBookingModal: React.FC<MyBookingModalProps> = ({ isOpen, onClose,
 
         <div className="px-6 py-3 border-t border-stone-200 bg-stone-50 flex justify-end">
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
           >

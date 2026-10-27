@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js';
 import { withSupabase } from 'npm:@supabase/server';
-import { jsonResponse } from '../_shared/paystack.ts';
+import { jsonResponse } from '../_shared/http.ts';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const roles = new Set(['admin', 'manager', 'staff']);

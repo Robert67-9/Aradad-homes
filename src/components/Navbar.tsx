@@ -60,6 +60,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             Location
           </a>
           <button
+            type="button"
             onClick={onOpenMyBooking}
             className="flex items-center gap-1.5 text-stone-300 hover:text-[#DFB76C] transition-colors"
           >
@@ -72,6 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2.5 sm:gap-3">
           {/* Currency Toggle */}
           <button
+            type="button"
             onClick={onToggleCurrency}
             title="Toggle Currency (USD / GHS)"
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700/80 transition-colors"
@@ -89,6 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {currentUser ? (
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={onOpenAdminPortal}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#C89B3C] hover:bg-[#DFB76C] text-stone-950 transition-colors shadow-xs"
               >
@@ -96,6 +99,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="max-w-[100px] truncate">{currentUser.name.split(' ')[0]} (Host)</span>
               </button>
               <button
+                type="button"
                 onClick={onLogout}
                 title="Log out from staff portal"
                 className="p-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-white border border-stone-700/80 transition-colors"
@@ -107,6 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Mobile Menu Trigger */}
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="lg:hidden p-2 rounded-lg bg-stone-900 text-stone-300 hover:text-white border border-stone-800"
             aria-label="Toggle navigation menu"
@@ -152,6 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div className="pt-3 border-t border-stone-800/80 flex flex-col gap-2.5">
             <button
+              type="button"
               onClick={() => {
                 setMobileMenuOpen(false);
                 onOpenMyBooking();
@@ -167,6 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {currentUser && (
               <button
+                type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   onOpenAdminPortal();

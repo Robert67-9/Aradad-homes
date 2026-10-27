@@ -82,7 +82,6 @@ export type PaymentPreference = 'full' | 'deposit' | 'arrival';
 export type PaymentGateway =
   | 'mobile_money'
   | 'bank_transfer'
-  | 'paystack'
   | 'cash';
 
 export interface Booking {
@@ -141,13 +140,6 @@ export interface Review {
   title: string;
   comment: string;
   date: string;
-}
-
-export interface SupabaseConfig {
-  url: string;
-  anonKey: string;
-  isConnected: boolean;
-  isUsingFallback: boolean;
 }
 
 export interface SiteSettings {

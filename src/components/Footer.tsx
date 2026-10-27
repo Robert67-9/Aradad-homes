@@ -16,7 +16,7 @@ export const Footer: React.FC<FooterProps> = ({
   isAdminSignedIn,
   siteSettings,
 }) => {
-  const domain = siteSettings?.domain || 'adradhomesgh.com';
+  const domain = siteSettings?.domain || 'www.aradadhomesgh.com';
   const siteName = siteSettings?.siteName || 'Aradad Homes';
   const poweredBy = siteSettings?.poweredBy || 'JAMS TECH';
   const ownerName = siteSettings?.ownerName || 'James M. Nartey';
@@ -77,6 +77,7 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <button
+                  type="button"
                   onClick={onOpenMyBooking}
                   className="hover:text-[#DFB76C] transition-colors text-left flex items-center gap-1.5 pt-1 text-stone-300"
                 >

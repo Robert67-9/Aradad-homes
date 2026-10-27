@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Unit, Currency } from '../lib/types';
 import { formatCurrency } from '../lib/utils';
 import {
@@ -63,6 +63,15 @@ export const ListingCard: React.FC<ListingCardProps> = ({
       prevImage(event);
     }
   };
+
+  useEffect(() => {
+    if (unit.images.length <= 1 || isGalleryOpen) return;
+    const timer = window.setInterval(() => {
+      setActiveImageIndex(prev => (prev + 1) % unit.images.length);
+    }, 3500);
+
+    return () => window.clearInterval(timer);
+  }, [isGalleryOpen, unit.images.length]);
 
   return (
     <>
@@ -214,6 +223,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {isGalleryOpen && (

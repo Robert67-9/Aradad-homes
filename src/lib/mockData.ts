@@ -283,7 +283,7 @@ export const CANCELLATION_POLICY = {
 
 export const DEFAULT_SITE_SETTINGS = {
   siteName: 'Aradad Homes',
-  domain: 'adradhomesgh.com',
+  domain: 'www.aradadhomesgh.com',
   tagline: 'Private En-Suite Rooms in Adjiringanor, Accra',
   address: 'Nii Kwei Mensah Street',
   neighborhood: 'Adjiringanor',
